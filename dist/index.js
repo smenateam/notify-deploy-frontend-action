@@ -44,9 +44,182 @@ module.exports =
 /******/ })
 /************************************************************************/
 /******/ ([
-/* 0 */,
-/* 1 */,
-/* 2 */,
+/* 0 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+const { requestLog } = __webpack_require__(916);
+const {
+  restEndpointMethods
+} = __webpack_require__(842);
+
+const Octokit = __webpack_require__(529);
+
+const CORE_PLUGINS = [
+  __webpack_require__(190),
+  __webpack_require__(19), // deprecated: remove in v17
+  requestLog,
+  __webpack_require__(148),
+  restEndpointMethods,
+  __webpack_require__(430),
+
+  __webpack_require__(850) // deprecated: remove in v17
+];
+
+module.exports = Octokit.plugin(CORE_PLUGINS);
+
+
+/***/ }),
+/* 1 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+// Copyright 2015 Joyent, Inc.
+
+module.exports = {
+	Verifier: Verifier,
+	Signer: Signer
+};
+
+var nacl = __webpack_require__(196);
+var stream = __webpack_require__(413);
+var util = __webpack_require__(669);
+var assert = __webpack_require__(757);
+var Buffer = __webpack_require__(481).Buffer;
+var Signature = __webpack_require__(575);
+
+function Verifier(key, hashAlgo) {
+	if (hashAlgo.toLowerCase() !== 'sha512')
+		throw (new Error('ED25519 only supports the use of ' +
+		    'SHA-512 hashes'));
+
+	this.key = key;
+	this.chunks = [];
+
+	stream.Writable.call(this, {});
+}
+util.inherits(Verifier, stream.Writable);
+
+Verifier.prototype._write = function (chunk, enc, cb) {
+	this.chunks.push(chunk);
+	cb();
+};
+
+Verifier.prototype.update = function (chunk) {
+	if (typeof (chunk) === 'string')
+		chunk = Buffer.from(chunk, 'binary');
+	this.chunks.push(chunk);
+};
+
+Verifier.prototype.verify = function (signature, fmt) {
+	var sig;
+	if (Signature.isSignature(signature, [2, 0])) {
+		if (signature.type !== 'ed25519')
+			return (false);
+		sig = signature.toBuffer('raw');
+
+	} else if (typeof (signature) === 'string') {
+		sig = Buffer.from(signature, 'base64');
+
+	} else if (Signature.isSignature(signature, [1, 0])) {
+		throw (new Error('signature was created by too old ' +
+		    'a version of sshpk and cannot be verified'));
+	}
+
+	assert.buffer(sig);
+	return (nacl.sign.detached.verify(
+	    new Uint8Array(Buffer.concat(this.chunks)),
+	    new Uint8Array(sig),
+	    new Uint8Array(this.key.part.A.data)));
+};
+
+function Signer(key, hashAlgo) {
+	if (hashAlgo.toLowerCase() !== 'sha512')
+		throw (new Error('ED25519 only supports the use of ' +
+		    'SHA-512 hashes'));
+
+	this.key = key;
+	this.chunks = [];
+
+	stream.Writable.call(this, {});
+}
+util.inherits(Signer, stream.Writable);
+
+Signer.prototype._write = function (chunk, enc, cb) {
+	this.chunks.push(chunk);
+	cb();
+};
+
+Signer.prototype.update = function (chunk) {
+	if (typeof (chunk) === 'string')
+		chunk = Buffer.from(chunk, 'binary');
+	this.chunks.push(chunk);
+};
+
+Signer.prototype.sign = function () {
+	var sig = nacl.sign.detached(
+	    new Uint8Array(Buffer.concat(this.chunks)),
+	    new Uint8Array(Buffer.concat([
+		this.key.part.k.data, this.key.part.A.data])));
+	var sigBuf = Buffer.from(sig);
+	var sigObj = Signature.parse(sigBuf, 'ed25519', 'raw');
+	sigObj.hashAlgorithm = 'sha512';
+	return (sigObj);
+};
+
+
+/***/ }),
+/* 2 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+const os = __webpack_require__(87);
+const macosRelease = __webpack_require__(118);
+const winRelease = __webpack_require__(49);
+
+const osName = (platform, release) => {
+	if (!platform && release) {
+		throw new Error('You can\'t specify a `release` without specifying `platform`');
+	}
+
+	platform = platform || os.platform();
+
+	let id;
+
+	if (platform === 'darwin') {
+		if (!release && os.platform() === 'darwin') {
+			release = os.release();
+		}
+
+		const prefix = release ? (Number(release.split('.')[0]) > 15 ? 'macOS' : 'OS X') : 'macOS';
+		id = release ? macosRelease(release).name : '';
+		return prefix + (id ? ' ' + id : '');
+	}
+
+	if (platform === 'linux') {
+		if (!release && os.platform() === 'linux') {
+			release = os.release();
+		}
+
+		id = release ? release.replace(/^(\d+\.\d+).*/, '$1') : '';
+		return 'Linux' + (id ? ' ' + id : '');
+	}
+
+	if (platform === 'win32') {
+		if (!release && os.platform() === 'win32') {
+			release = os.release();
+		}
+
+		id = release ? winRelease(release) : '';
+		return 'Windows' + (id ? ' ' + id : '');
+	}
+
+	return platform;
+};
+
+module.exports = osName;
+
+
+/***/ }),
 /* 3 */,
 /* 4 */,
 /* 5 */,
@@ -54,58 +227,95 @@ module.exports =
 /* 7 */,
 /* 8 */,
 /* 9 */
-/***/ (function(module) {
+/***/ (function(module, __unusedexports, __webpack_require__) {
 
-"use strict";
+var once = __webpack_require__(969);
 
+var noop = function() {};
 
-var KEYWORDS = [
-  'multipleOf',
-  'maximum',
-  'exclusiveMaximum',
-  'minimum',
-  'exclusiveMinimum',
-  'maxLength',
-  'minLength',
-  'pattern',
-  'additionalItems',
-  'maxItems',
-  'minItems',
-  'uniqueItems',
-  'maxProperties',
-  'minProperties',
-  'required',
-  'additionalProperties',
-  'enum',
-  'format',
-  'const'
-];
-
-module.exports = function (metaSchema, keywordsJsonPointers) {
-  for (var i=0; i<keywordsJsonPointers.length; i++) {
-    metaSchema = JSON.parse(JSON.stringify(metaSchema));
-    var segments = keywordsJsonPointers[i].split('/');
-    var keywords = metaSchema;
-    var j;
-    for (j=1; j<segments.length; j++)
-      keywords = keywords[segments[j]];
-
-    for (j=0; j<KEYWORDS.length; j++) {
-      var key = KEYWORDS[j];
-      var schema = keywords[key];
-      if (schema) {
-        keywords[key] = {
-          anyOf: [
-            schema,
-            { $ref: 'https://raw.githubusercontent.com/epoberezkin/ajv/master/lib/refs/data.json#' }
-          ]
-        };
-      }
-    }
-  }
-
-  return metaSchema;
+var isRequest = function(stream) {
+	return stream.setHeader && typeof stream.abort === 'function';
 };
+
+var isChildProcess = function(stream) {
+	return stream.stdio && Array.isArray(stream.stdio) && stream.stdio.length === 3
+};
+
+var eos = function(stream, opts, callback) {
+	if (typeof opts === 'function') return eos(stream, null, opts);
+	if (!opts) opts = {};
+
+	callback = once(callback || noop);
+
+	var ws = stream._writableState;
+	var rs = stream._readableState;
+	var readable = opts.readable || (opts.readable !== false && stream.readable);
+	var writable = opts.writable || (opts.writable !== false && stream.writable);
+
+	var onlegacyfinish = function() {
+		if (!stream.writable) onfinish();
+	};
+
+	var onfinish = function() {
+		writable = false;
+		if (!readable) callback.call(stream);
+	};
+
+	var onend = function() {
+		readable = false;
+		if (!writable) callback.call(stream);
+	};
+
+	var onexit = function(exitCode) {
+		callback.call(stream, exitCode ? new Error('exited with error code: ' + exitCode) : null);
+	};
+
+	var onerror = function(err) {
+		callback.call(stream, err);
+	};
+
+	var onclose = function() {
+		if (readable && !(rs && rs.ended)) return callback.call(stream, new Error('premature close'));
+		if (writable && !(ws && ws.ended)) return callback.call(stream, new Error('premature close'));
+	};
+
+	var onrequest = function() {
+		stream.req.on('finish', onfinish);
+	};
+
+	if (isRequest(stream)) {
+		stream.on('complete', onfinish);
+		stream.on('abort', onclose);
+		if (stream.req) onrequest();
+		else stream.on('request', onrequest);
+	} else if (writable && !ws) { // legacy streams
+		stream.on('end', onlegacyfinish);
+		stream.on('close', onlegacyfinish);
+	}
+
+	if (isChildProcess(stream)) stream.on('exit', onexit);
+
+	stream.on('end', onend);
+	stream.on('finish', onfinish);
+	if (opts.error !== false) stream.on('error', onerror);
+	stream.on('close', onclose);
+
+	return function() {
+		stream.removeListener('complete', onfinish);
+		stream.removeListener('abort', onclose);
+		stream.removeListener('request', onrequest);
+		if (stream.req) stream.req.removeListener('finish', onfinish);
+		stream.removeListener('end', onlegacyfinish);
+		stream.removeListener('close', onlegacyfinish);
+		stream.removeListener('finish', onfinish);
+		stream.removeListener('exit', onexit);
+		stream.removeListener('end', onend);
+		stream.removeListener('error', onerror);
+		stream.removeListener('close', onclose);
+	};
+};
+
+module.exports = eos;
 
 
 /***/ }),
@@ -152,7 +362,45 @@ module.exports = isFunction;
 
 
 /***/ }),
-/* 11 */,
+/* 11 */
+/***/ (function(module) {
+
+// Returns a wrapper function that returns a wrapped callback
+// The wrapper function should do some stuff, and return a
+// presumably different callback function.
+// This makes sure that own properties are retained, so that
+// decorations and such are not lost along the way.
+module.exports = wrappy
+function wrappy (fn, cb) {
+  if (fn && cb) return wrappy(fn)(cb)
+
+  if (typeof fn !== 'function')
+    throw new TypeError('need wrapper function')
+
+  Object.keys(fn).forEach(function (k) {
+    wrapper[k] = fn[k]
+  })
+
+  return wrapper
+
+  function wrapper() {
+    var args = new Array(arguments.length)
+    for (var i = 0; i < args.length; i++) {
+      args[i] = arguments[i]
+    }
+    var ret = fn.apply(this, args)
+    var cb = args[args.length-1]
+    if (typeof ret === 'function' && ret !== cb) {
+      Object.keys(cb).forEach(function (k) {
+        ret[k] = cb[k]
+      })
+    }
+    return ret
+  }
+}
+
+
+/***/ }),
 /* 12 */,
 /* 13 */
 /***/ (function(module) {
@@ -179,7 +427,34 @@ module.exports = {
 
 
 /***/ }),
-/* 14 */,
+/* 14 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const base_1 = __webpack_require__(142);
+const __1 = __webpack_require__(941);
+exports.UserPaths = {
+    current: '/admin/users/me',
+    users: '/admin/users',
+    user: '/admin/users/{userId}'
+};
+class UserEndpoint extends base_1.BaseEndpoint {
+    current() {
+        return this.getResourceWithFields(exports.UserPaths.current, __1.UserImpl);
+    }
+    all(paginationOptions = {}) {
+        return this.getResourceWithFields(exports.UserPaths.users, __1.ReducedUserImpl, { qs: paginationOptions });
+    }
+    byId(userId) {
+        return this.getResourceWithFields(this.format(exports.UserPaths.user, { userId }), __1.UserImpl);
+    }
+}
+exports.UserEndpoint = UserEndpoint;
+
+
+/***/ }),
 /* 15 */,
 /* 16 */
 /***/ (function(module) {
@@ -188,13 +463,138 @@ module.exports = require("tls");
 
 /***/ }),
 /* 17 */,
-/* 18 */,
-/* 19 */,
-/* 20 */,
+/* 18 */
+/***/ (function() {
+
+eval("require")("encoding");
+
+
+/***/ }),
+/* 19 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = authenticationPlugin;
+
+const { Deprecation } = __webpack_require__(692);
+const once = __webpack_require__(969);
+
+const deprecateAuthenticate = once((log, deprecation) => log.warn(deprecation));
+
+const authenticate = __webpack_require__(674);
+const beforeRequest = __webpack_require__(471);
+const requestError = __webpack_require__(349);
+
+function authenticationPlugin(octokit, options) {
+  if (options.auth) {
+    octokit.authenticate = () => {
+      deprecateAuthenticate(
+        octokit.log,
+        new Deprecation(
+          '[@octokit/rest] octokit.authenticate() is deprecated and has no effect when "auth" option is set on Octokit constructor'
+        )
+      );
+    };
+    return;
+  }
+  const state = {
+    octokit,
+    auth: false
+  };
+  octokit.authenticate = authenticate.bind(null, state);
+  octokit.hook.before("request", beforeRequest.bind(null, state));
+  octokit.hook.error("request", requestError.bind(null, state));
+}
+
+
+/***/ }),
+/* 20 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+
+const cp = __webpack_require__(129);
+const parse = __webpack_require__(568);
+const enoent = __webpack_require__(881);
+
+function spawn(command, args, options) {
+    // Parse the arguments
+    const parsed = parse(command, args, options);
+
+    // Spawn the child process
+    const spawned = cp.spawn(parsed.command, parsed.args, parsed.options);
+
+    // Hook into child process "exit" event to emit an error if the command
+    // does not exists, see: https://github.com/IndigoUnited/node-cross-spawn/issues/16
+    enoent.hookChildProcess(spawned, parsed);
+
+    return spawned;
+}
+
+function spawnSync(command, args, options) {
+    // Parse the arguments
+    const parsed = parse(command, args, options);
+
+    // Spawn the child process
+    const result = cp.spawnSync(parsed.command, parsed.args, parsed.options);
+
+    // Analyze if the command does not exist, see: https://github.com/IndigoUnited/node-cross-spawn/issues/16
+    result.error = result.error || enoent.verifyENOENTSync(result.status, parsed);
+
+    return result;
+}
+
+module.exports = spawn;
+module.exports.spawn = spawn;
+module.exports.sync = spawnSync;
+
+module.exports._parse = parse;
+module.exports._enoent = enoent;
+
+
+/***/ }),
 /* 21 */,
 /* 22 */,
 /* 23 */,
-/* 24 */,
+/* 24 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const base_1 = __webpack_require__(142);
+const __1 = __webpack_require__(941);
+exports.SprintPaths = {
+    sprints: '/agiles/{agileId}/sprints',
+    sprint: '/agiles/{agileId}/sprints/{sprintId}'
+};
+class SprintEndpoint extends base_1.BaseEndpoint {
+    all(agileId, paginationOptions = {}) {
+        return this.getResourceWithFields(this.format(exports.SprintPaths.sprints, { agileId }), __1.ReducedSprintImpl, { qs: paginationOptions });
+    }
+    byId(agileId, sprintId) {
+        return this.getResourceWithFields(this.format(exports.SprintPaths.sprint, { agileId, sprintId }), __1.SprintImpl);
+    }
+    delete(agileId, sprintId) {
+        return this.toPromise(this.client.delete(this.format(exports.SprintPaths.sprint, { agileId, sprintId })));
+    }
+    create(agileId, sprint) {
+        return this.postResourceWithFields(this.format(exports.SprintPaths.sprints, { agileId }), __1.SprintImpl, {
+            body: sprint
+        });
+    }
+    update(agileId, sprint) {
+        return this.postResourceWithFields(this.format(exports.SprintPaths.sprint, {
+            agileId, sprintId: sprint.id
+        }), __1.SprintImpl, {
+            body: sprint
+        });
+    }
+}
+exports.SprintEndpoint = SprintEndpoint;
+
+
+/***/ }),
 /* 25 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
@@ -524,7 +924,26 @@ exports.jar = function (store) {
 /* 36 */,
 /* 37 */,
 /* 38 */,
-/* 39 */,
+/* 39 */
+/***/ (function(module) {
+
+"use strict";
+
+module.exports = opts => {
+	opts = opts || {};
+
+	const env = opts.env || process.env;
+	const platform = opts.platform || process.platform;
+
+	if (platform !== 'win32') {
+		return 'PATH';
+	}
+
+	return Object.keys(env).find(x => x.toUpperCase() === 'PATH') || 'Path';
+};
+
+
+/***/ }),
 /* 40 */,
 /* 41 */
 /***/ (function(module) {
@@ -689,9 +1108,74 @@ function validateKeyword(definition, throwError) {
 
 /***/ }),
 /* 46 */,
-/* 47 */,
+/* 47 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = factory;
+
+const Octokit = __webpack_require__(402);
+const registerPlugin = __webpack_require__(855);
+
+function factory(plugins) {
+  const Api = Octokit.bind(null, plugins || []);
+  Api.plugin = registerPlugin.bind(null, plugins || []);
+  return Api;
+}
+
+
+/***/ }),
 /* 48 */,
-/* 49 */,
+/* 49 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+const os = __webpack_require__(87);
+const execa = __webpack_require__(955);
+
+// Reference: https://www.gaijin.at/en/lstwinver.php
+const names = new Map([
+	['10.0', '10'],
+	['6.3', '8.1'],
+	['6.2', '8'],
+	['6.1', '7'],
+	['6.0', 'Vista'],
+	['5.2', 'Server 2003'],
+	['5.1', 'XP'],
+	['5.0', '2000'],
+	['4.9', 'ME'],
+	['4.1', '98'],
+	['4.0', '95']
+]);
+
+const windowsRelease = release => {
+	const version = /\d+\.\d/.exec(release || os.release());
+
+	if (release && !version) {
+		throw new Error('`release` argument doesn\'t match `n.n`');
+	}
+
+	const ver = (version || [])[0];
+
+	// Server 2008, 2012 and 2016 versions are ambiguous with desktop versions and must be detected at runtime.
+	// If `release` is omitted or we're on a Windows system, and the version number is an ambiguous version
+	// then use `wmic` to get the OS caption: https://msdn.microsoft.com/en-us/library/aa394531(v=vs.85).aspx
+	// If the resulting caption contains the year 2008, 2012 or 2016, it is a server version, so return a server OS name.
+	if ((!release || release === os.release()) && ['6.1', '6.2', '6.3', '10.0'].includes(ver)) {
+		const stdout = execa.sync('wmic', ['os', 'get', 'Caption']).stdout || '';
+		const year = (stdout.match(/2008|2012|2016/) || [])[0];
+		if (year) {
+			return `Server ${year}`;
+		}
+	}
+
+	return names.get(ver);
+};
+
+module.exports = windowsRelease;
+
+
+/***/ }),
 /* 50 */
 /***/ (function(module) {
 
@@ -841,13 +1325,13 @@ module.exports = {
 
 // Copyright 2012 Joyent, Inc.  All rights reserved.
 
-var assert = __webpack_require__(489);
+var assert = __webpack_require__(757);
 var crypto = __webpack_require__(417);
 var http = __webpack_require__(605);
 var util = __webpack_require__(669);
 var sshpk = __webpack_require__(650);
-var jsprim = __webpack_require__(348);
-var utils = __webpack_require__(909);
+var jsprim = __webpack_require__(926);
+var utils = __webpack_require__(161);
 
 var sprintf = __webpack_require__(669).format;
 
@@ -1282,9 +1766,9 @@ module.exports = {
 	write: write
 };
 
-var assert = __webpack_require__(489);
+var assert = __webpack_require__(757);
 var asn1 = __webpack_require__(62);
-var Buffer = __webpack_require__(215).Buffer;
+var Buffer = __webpack_require__(481).Buffer;
 var algs = __webpack_require__(98);
 var utils = __webpack_require__(270);
 var crypto = __webpack_require__(417);
@@ -1294,7 +1778,7 @@ var PrivateKey = __webpack_require__(502);
 var pem = __webpack_require__(268);
 var rfc4253 = __webpack_require__(538);
 var SSHBuffer = __webpack_require__(940);
-var errors = __webpack_require__(753);
+var errors = __webpack_require__(570);
 
 var bcrypt;
 
@@ -1544,7 +2028,161 @@ function write(key, options) {
 /* 81 */,
 /* 82 */,
 /* 83 */,
-/* 84 */,
+/* 84 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+module.exports =
+function(Promise, PromiseArray, apiRejection) {
+var util = __webpack_require__(248);
+var RangeError = __webpack_require__(607).RangeError;
+var AggregateError = __webpack_require__(607).AggregateError;
+var isArray = util.isArray;
+var CANCELLATION = {};
+
+
+function SomePromiseArray(values) {
+    this.constructor$(values);
+    this._howMany = 0;
+    this._unwrap = false;
+    this._initialized = false;
+}
+util.inherits(SomePromiseArray, PromiseArray);
+
+SomePromiseArray.prototype._init = function () {
+    if (!this._initialized) {
+        return;
+    }
+    if (this._howMany === 0) {
+        this._resolve([]);
+        return;
+    }
+    this._init$(undefined, -5);
+    var isArrayResolved = isArray(this._values);
+    if (!this._isResolved() &&
+        isArrayResolved &&
+        this._howMany > this._canPossiblyFulfill()) {
+        this._reject(this._getRangeError(this.length()));
+    }
+};
+
+SomePromiseArray.prototype.init = function () {
+    this._initialized = true;
+    this._init();
+};
+
+SomePromiseArray.prototype.setUnwrap = function () {
+    this._unwrap = true;
+};
+
+SomePromiseArray.prototype.howMany = function () {
+    return this._howMany;
+};
+
+SomePromiseArray.prototype.setHowMany = function (count) {
+    this._howMany = count;
+};
+
+SomePromiseArray.prototype._promiseFulfilled = function (value) {
+    this._addFulfilled(value);
+    if (this._fulfilled() === this.howMany()) {
+        this._values.length = this.howMany();
+        if (this.howMany() === 1 && this._unwrap) {
+            this._resolve(this._values[0]);
+        } else {
+            this._resolve(this._values);
+        }
+        return true;
+    }
+    return false;
+
+};
+SomePromiseArray.prototype._promiseRejected = function (reason) {
+    this._addRejected(reason);
+    return this._checkOutcome();
+};
+
+SomePromiseArray.prototype._promiseCancelled = function () {
+    if (this._values instanceof Promise || this._values == null) {
+        return this._cancel();
+    }
+    this._addRejected(CANCELLATION);
+    return this._checkOutcome();
+};
+
+SomePromiseArray.prototype._checkOutcome = function() {
+    if (this.howMany() > this._canPossiblyFulfill()) {
+        var e = new AggregateError();
+        for (var i = this.length(); i < this._values.length; ++i) {
+            if (this._values[i] !== CANCELLATION) {
+                e.push(this._values[i]);
+            }
+        }
+        if (e.length > 0) {
+            this._reject(e);
+        } else {
+            this._cancel();
+        }
+        return true;
+    }
+    return false;
+};
+
+SomePromiseArray.prototype._fulfilled = function () {
+    return this._totalResolved;
+};
+
+SomePromiseArray.prototype._rejected = function () {
+    return this._values.length - this.length();
+};
+
+SomePromiseArray.prototype._addRejected = function (reason) {
+    this._values.push(reason);
+};
+
+SomePromiseArray.prototype._addFulfilled = function (value) {
+    this._values[this._totalResolved++] = value;
+};
+
+SomePromiseArray.prototype._canPossiblyFulfill = function () {
+    return this.length() - this._rejected();
+};
+
+SomePromiseArray.prototype._getRangeError = function (count) {
+    var message = "Input array must contain at least " +
+            this._howMany + " items but contains only " + count + " items";
+    return new RangeError(message);
+};
+
+SomePromiseArray.prototype._resolveEmptyArray = function () {
+    this._reject(this._getRangeError(0));
+};
+
+function some(promises, howMany) {
+    if ((howMany | 0) !== howMany || howMany < 0) {
+        return apiRejection("expecting a positive integer\u000a\u000a    See http://goo.gl/MqrFmX\u000a");
+    }
+    var ret = new SomePromiseArray(promises);
+    var promise = ret.promise();
+    ret.setHowMany(howMany);
+    ret.init();
+    return promise;
+}
+
+Promise.some = function (promises, howMany) {
+    return some(promises, howMany);
+};
+
+Promise.prototype.some = function (howMany) {
+    return some(this, howMany);
+};
+
+Promise._SomePromiseArray = SomePromiseArray;
+};
+
+
+/***/ }),
 /* 85 */
 /***/ (function(module) {
 
@@ -1666,14 +2304,19 @@ function serial(list, iterator, callback)
 /* 93 */,
 /* 94 */,
 /* 95 */,
-/* 96 */,
+/* 96 */
+/***/ (function(module) {
+
+module.exports = {"$id":"entry.json#","$schema":"http://json-schema.org/draft-06/schema#","type":"object","optional":true,"required":["startedDateTime","time","request","response","cache","timings"],"properties":{"pageref":{"type":"string"},"startedDateTime":{"type":"string","format":"date-time","pattern":"^(\\d{4})(-)?(\\d\\d)(-)?(\\d\\d)(T)?(\\d\\d)(:)?(\\d\\d)(:)?(\\d\\d)(\\.\\d+)?(Z|([+-])(\\d\\d)(:)?(\\d\\d))"},"time":{"type":"number","min":0},"request":{"$ref":"request.json#"},"response":{"$ref":"response.json#"},"cache":{"$ref":"cache.json#"},"timings":{"$ref":"timings.json#"},"serverIPAddress":{"type":"string","oneOf":[{"format":"ipv4"},{"format":"ipv6"}]},"connection":{"type":"string"},"comment":{"type":"string"}}};
+
+/***/ }),
 /* 97 */,
 /* 98 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
 // Copyright 2015 Joyent, Inc.
 
-var Buffer = __webpack_require__(215).Buffer;
+var Buffer = __webpack_require__(481).Buffer;
 
 var algInfo = {
 	'dsa': {
@@ -1851,7 +2494,7 @@ module.exports = {
 
 var Bluebird = __webpack_require__(440).getNewLibraryCopy(),
     configure = __webpack_require__(292),
-    stealthyRequire = __webpack_require__(654);
+    stealthyRequire = __webpack_require__(583);
 
 try {
 
@@ -1904,14 +2547,42 @@ module.exports = request;
 /***/ }),
 /* 100 */,
 /* 101 */,
-/* 102 */,
+/* 102 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const base_1 = __webpack_require__(142);
+const __1 = __webpack_require__(941);
+const workItem_1 = __webpack_require__(387);
+exports.ProjectPaths = {
+    projects: '/admin/projects',
+    project: '/admin/projects/{projectId}',
+    workItemTypes: '/admin/projects/{projectId}/timeTrackingSettings/workItemTypes'
+};
+class ProjectEndpoint extends base_1.BaseEndpoint {
+    all(paginationOptions = {}) {
+        return this.getResourceWithFields(exports.ProjectPaths.projects, __1.ReducedProjectImpl, { qs: paginationOptions });
+    }
+    byId(projectId) {
+        return this.getResourceWithFields(this.format(exports.ProjectPaths.project, { projectId }), __1.ProjectImpl);
+    }
+    getWorkItemTypes(projectId) {
+        return this.getResourceWithFields(this.format(exports.ProjectPaths.workItemTypes, { projectId }), workItem_1.WorkItemTypeImpl);
+    }
+}
+exports.ProjectEndpoint = ProjectEndpoint;
+
+
+/***/ }),
 /* 103 */,
 /* 104 */
 /***/ (function(__unusedmodule, __unusedexports, __webpack_require__) {
 
 const core = __webpack_require__(470)
-const github = __webpack_require__(690)
-const Youtrack = __webpack_require__(841)
+const github = __webpack_require__(469)
+const Youtrack = __webpack_require__(941)
 const rp = __webpack_require__(99)
 
 async function run() {
@@ -2187,7 +2858,45 @@ exports.generateBase = generateBase
 /* 115 */,
 /* 116 */,
 /* 117 */,
-/* 118 */,
+/* 118 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+const os = __webpack_require__(87);
+
+const nameMap = new Map([
+	[19, 'Catalina'],
+	[18, 'Mojave'],
+	[17, 'High Sierra'],
+	[16, 'Sierra'],
+	[15, 'El Capitan'],
+	[14, 'Yosemite'],
+	[13, 'Mavericks'],
+	[12, 'Mountain Lion'],
+	[11, 'Lion'],
+	[10, 'Snow Leopard'],
+	[9, 'Leopard'],
+	[8, 'Tiger'],
+	[7, 'Panther'],
+	[6, 'Jaguar'],
+	[5, 'Puma']
+]);
+
+const macosRelease = release => {
+	release = Number((release || os.release()).split('.')[0]);
+	return {
+		name: nameMap.get(release),
+		version: '10.' + (release - 4)
+	};
+};
+
+module.exports = macosRelease;
+// TODO: remove this in the next major version
+module.exports.default = macosRelease;
+
+
+/***/ }),
 /* 119 */,
 /* 120 */,
 /* 121 */,
@@ -2195,16 +2904,1135 @@ exports.generateBase = generateBase
 /* 123 */,
 /* 124 */,
 /* 125 */,
-/* 126 */,
+/* 126 */
+/***/ (function(module) {
+
+/**
+ * lodash (Custom Build) <https://lodash.com/>
+ * Build: `lodash modularize exports="npm" -o ./`
+ * Copyright jQuery Foundation and other contributors <https://jquery.org/>
+ * Released under MIT license <https://lodash.com/license>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ */
+
+/** Used as the size to enable large array optimizations. */
+var LARGE_ARRAY_SIZE = 200;
+
+/** Used to stand-in for `undefined` hash values. */
+var HASH_UNDEFINED = '__lodash_hash_undefined__';
+
+/** Used as references for various `Number` constants. */
+var INFINITY = 1 / 0;
+
+/** `Object#toString` result references. */
+var funcTag = '[object Function]',
+    genTag = '[object GeneratorFunction]';
+
+/**
+ * Used to match `RegExp`
+ * [syntax characters](http://ecma-international.org/ecma-262/7.0/#sec-patterns).
+ */
+var reRegExpChar = /[\\^$.*+?()[\]{}|]/g;
+
+/** Used to detect host constructors (Safari). */
+var reIsHostCtor = /^\[object .+?Constructor\]$/;
+
+/** Detect free variable `global` from Node.js. */
+var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
+
+/** Detect free variable `self`. */
+var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
+
+/** Used as a reference to the global object. */
+var root = freeGlobal || freeSelf || Function('return this')();
+
+/**
+ * A specialized version of `_.includes` for arrays without support for
+ * specifying an index to search from.
+ *
+ * @private
+ * @param {Array} [array] The array to inspect.
+ * @param {*} target The value to search for.
+ * @returns {boolean} Returns `true` if `target` is found, else `false`.
+ */
+function arrayIncludes(array, value) {
+  var length = array ? array.length : 0;
+  return !!length && baseIndexOf(array, value, 0) > -1;
+}
+
+/**
+ * This function is like `arrayIncludes` except that it accepts a comparator.
+ *
+ * @private
+ * @param {Array} [array] The array to inspect.
+ * @param {*} target The value to search for.
+ * @param {Function} comparator The comparator invoked per element.
+ * @returns {boolean} Returns `true` if `target` is found, else `false`.
+ */
+function arrayIncludesWith(array, value, comparator) {
+  var index = -1,
+      length = array ? array.length : 0;
+
+  while (++index < length) {
+    if (comparator(value, array[index])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The base implementation of `_.findIndex` and `_.findLastIndex` without
+ * support for iteratee shorthands.
+ *
+ * @private
+ * @param {Array} array The array to inspect.
+ * @param {Function} predicate The function invoked per iteration.
+ * @param {number} fromIndex The index to search from.
+ * @param {boolean} [fromRight] Specify iterating from right to left.
+ * @returns {number} Returns the index of the matched value, else `-1`.
+ */
+function baseFindIndex(array, predicate, fromIndex, fromRight) {
+  var length = array.length,
+      index = fromIndex + (fromRight ? 1 : -1);
+
+  while ((fromRight ? index-- : ++index < length)) {
+    if (predicate(array[index], index, array)) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+/**
+ * The base implementation of `_.indexOf` without `fromIndex` bounds checks.
+ *
+ * @private
+ * @param {Array} array The array to inspect.
+ * @param {*} value The value to search for.
+ * @param {number} fromIndex The index to search from.
+ * @returns {number} Returns the index of the matched value, else `-1`.
+ */
+function baseIndexOf(array, value, fromIndex) {
+  if (value !== value) {
+    return baseFindIndex(array, baseIsNaN, fromIndex);
+  }
+  var index = fromIndex - 1,
+      length = array.length;
+
+  while (++index < length) {
+    if (array[index] === value) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+/**
+ * The base implementation of `_.isNaN` without support for number objects.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is `NaN`, else `false`.
+ */
+function baseIsNaN(value) {
+  return value !== value;
+}
+
+/**
+ * Checks if a cache value for `key` exists.
+ *
+ * @private
+ * @param {Object} cache The cache to query.
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function cacheHas(cache, key) {
+  return cache.has(key);
+}
+
+/**
+ * Gets the value at `key` of `object`.
+ *
+ * @private
+ * @param {Object} [object] The object to query.
+ * @param {string} key The key of the property to get.
+ * @returns {*} Returns the property value.
+ */
+function getValue(object, key) {
+  return object == null ? undefined : object[key];
+}
+
+/**
+ * Checks if `value` is a host object in IE < 9.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a host object, else `false`.
+ */
+function isHostObject(value) {
+  // Many host objects are `Object` objects that can coerce to strings
+  // despite having improperly defined `toString` methods.
+  var result = false;
+  if (value != null && typeof value.toString != 'function') {
+    try {
+      result = !!(value + '');
+    } catch (e) {}
+  }
+  return result;
+}
+
+/**
+ * Converts `set` to an array of its values.
+ *
+ * @private
+ * @param {Object} set The set to convert.
+ * @returns {Array} Returns the values.
+ */
+function setToArray(set) {
+  var index = -1,
+      result = Array(set.size);
+
+  set.forEach(function(value) {
+    result[++index] = value;
+  });
+  return result;
+}
+
+/** Used for built-in method references. */
+var arrayProto = Array.prototype,
+    funcProto = Function.prototype,
+    objectProto = Object.prototype;
+
+/** Used to detect overreaching core-js shims. */
+var coreJsData = root['__core-js_shared__'];
+
+/** Used to detect methods masquerading as native. */
+var maskSrcKey = (function() {
+  var uid = /[^.]+$/.exec(coreJsData && coreJsData.keys && coreJsData.keys.IE_PROTO || '');
+  return uid ? ('Symbol(src)_1.' + uid) : '';
+}());
+
+/** Used to resolve the decompiled source of functions. */
+var funcToString = funcProto.toString;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/**
+ * Used to resolve the
+ * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
+ * of values.
+ */
+var objectToString = objectProto.toString;
+
+/** Used to detect if a method is native. */
+var reIsNative = RegExp('^' +
+  funcToString.call(hasOwnProperty).replace(reRegExpChar, '\\$&')
+  .replace(/hasOwnProperty|(function).*?(?=\\\()| for .+?(?=\\\])/g, '$1.*?') + '$'
+);
+
+/** Built-in value references. */
+var splice = arrayProto.splice;
+
+/* Built-in method references that are verified to be native. */
+var Map = getNative(root, 'Map'),
+    Set = getNative(root, 'Set'),
+    nativeCreate = getNative(Object, 'create');
+
+/**
+ * Creates a hash object.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [entries] The key-value pairs to cache.
+ */
+function Hash(entries) {
+  var index = -1,
+      length = entries ? entries.length : 0;
+
+  this.clear();
+  while (++index < length) {
+    var entry = entries[index];
+    this.set(entry[0], entry[1]);
+  }
+}
+
+/**
+ * Removes all key-value entries from the hash.
+ *
+ * @private
+ * @name clear
+ * @memberOf Hash
+ */
+function hashClear() {
+  this.__data__ = nativeCreate ? nativeCreate(null) : {};
+}
+
+/**
+ * Removes `key` and its value from the hash.
+ *
+ * @private
+ * @name delete
+ * @memberOf Hash
+ * @param {Object} hash The hash to modify.
+ * @param {string} key The key of the value to remove.
+ * @returns {boolean} Returns `true` if the entry was removed, else `false`.
+ */
+function hashDelete(key) {
+  return this.has(key) && delete this.__data__[key];
+}
+
+/**
+ * Gets the hash value for `key`.
+ *
+ * @private
+ * @name get
+ * @memberOf Hash
+ * @param {string} key The key of the value to get.
+ * @returns {*} Returns the entry value.
+ */
+function hashGet(key) {
+  var data = this.__data__;
+  if (nativeCreate) {
+    var result = data[key];
+    return result === HASH_UNDEFINED ? undefined : result;
+  }
+  return hasOwnProperty.call(data, key) ? data[key] : undefined;
+}
+
+/**
+ * Checks if a hash value for `key` exists.
+ *
+ * @private
+ * @name has
+ * @memberOf Hash
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function hashHas(key) {
+  var data = this.__data__;
+  return nativeCreate ? data[key] !== undefined : hasOwnProperty.call(data, key);
+}
+
+/**
+ * Sets the hash `key` to `value`.
+ *
+ * @private
+ * @name set
+ * @memberOf Hash
+ * @param {string} key The key of the value to set.
+ * @param {*} value The value to set.
+ * @returns {Object} Returns the hash instance.
+ */
+function hashSet(key, value) {
+  var data = this.__data__;
+  data[key] = (nativeCreate && value === undefined) ? HASH_UNDEFINED : value;
+  return this;
+}
+
+// Add methods to `Hash`.
+Hash.prototype.clear = hashClear;
+Hash.prototype['delete'] = hashDelete;
+Hash.prototype.get = hashGet;
+Hash.prototype.has = hashHas;
+Hash.prototype.set = hashSet;
+
+/**
+ * Creates an list cache object.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [entries] The key-value pairs to cache.
+ */
+function ListCache(entries) {
+  var index = -1,
+      length = entries ? entries.length : 0;
+
+  this.clear();
+  while (++index < length) {
+    var entry = entries[index];
+    this.set(entry[0], entry[1]);
+  }
+}
+
+/**
+ * Removes all key-value entries from the list cache.
+ *
+ * @private
+ * @name clear
+ * @memberOf ListCache
+ */
+function listCacheClear() {
+  this.__data__ = [];
+}
+
+/**
+ * Removes `key` and its value from the list cache.
+ *
+ * @private
+ * @name delete
+ * @memberOf ListCache
+ * @param {string} key The key of the value to remove.
+ * @returns {boolean} Returns `true` if the entry was removed, else `false`.
+ */
+function listCacheDelete(key) {
+  var data = this.__data__,
+      index = assocIndexOf(data, key);
+
+  if (index < 0) {
+    return false;
+  }
+  var lastIndex = data.length - 1;
+  if (index == lastIndex) {
+    data.pop();
+  } else {
+    splice.call(data, index, 1);
+  }
+  return true;
+}
+
+/**
+ * Gets the list cache value for `key`.
+ *
+ * @private
+ * @name get
+ * @memberOf ListCache
+ * @param {string} key The key of the value to get.
+ * @returns {*} Returns the entry value.
+ */
+function listCacheGet(key) {
+  var data = this.__data__,
+      index = assocIndexOf(data, key);
+
+  return index < 0 ? undefined : data[index][1];
+}
+
+/**
+ * Checks if a list cache value for `key` exists.
+ *
+ * @private
+ * @name has
+ * @memberOf ListCache
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function listCacheHas(key) {
+  return assocIndexOf(this.__data__, key) > -1;
+}
+
+/**
+ * Sets the list cache `key` to `value`.
+ *
+ * @private
+ * @name set
+ * @memberOf ListCache
+ * @param {string} key The key of the value to set.
+ * @param {*} value The value to set.
+ * @returns {Object} Returns the list cache instance.
+ */
+function listCacheSet(key, value) {
+  var data = this.__data__,
+      index = assocIndexOf(data, key);
+
+  if (index < 0) {
+    data.push([key, value]);
+  } else {
+    data[index][1] = value;
+  }
+  return this;
+}
+
+// Add methods to `ListCache`.
+ListCache.prototype.clear = listCacheClear;
+ListCache.prototype['delete'] = listCacheDelete;
+ListCache.prototype.get = listCacheGet;
+ListCache.prototype.has = listCacheHas;
+ListCache.prototype.set = listCacheSet;
+
+/**
+ * Creates a map cache object to store key-value pairs.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [entries] The key-value pairs to cache.
+ */
+function MapCache(entries) {
+  var index = -1,
+      length = entries ? entries.length : 0;
+
+  this.clear();
+  while (++index < length) {
+    var entry = entries[index];
+    this.set(entry[0], entry[1]);
+  }
+}
+
+/**
+ * Removes all key-value entries from the map.
+ *
+ * @private
+ * @name clear
+ * @memberOf MapCache
+ */
+function mapCacheClear() {
+  this.__data__ = {
+    'hash': new Hash,
+    'map': new (Map || ListCache),
+    'string': new Hash
+  };
+}
+
+/**
+ * Removes `key` and its value from the map.
+ *
+ * @private
+ * @name delete
+ * @memberOf MapCache
+ * @param {string} key The key of the value to remove.
+ * @returns {boolean} Returns `true` if the entry was removed, else `false`.
+ */
+function mapCacheDelete(key) {
+  return getMapData(this, key)['delete'](key);
+}
+
+/**
+ * Gets the map value for `key`.
+ *
+ * @private
+ * @name get
+ * @memberOf MapCache
+ * @param {string} key The key of the value to get.
+ * @returns {*} Returns the entry value.
+ */
+function mapCacheGet(key) {
+  return getMapData(this, key).get(key);
+}
+
+/**
+ * Checks if a map value for `key` exists.
+ *
+ * @private
+ * @name has
+ * @memberOf MapCache
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function mapCacheHas(key) {
+  return getMapData(this, key).has(key);
+}
+
+/**
+ * Sets the map `key` to `value`.
+ *
+ * @private
+ * @name set
+ * @memberOf MapCache
+ * @param {string} key The key of the value to set.
+ * @param {*} value The value to set.
+ * @returns {Object} Returns the map cache instance.
+ */
+function mapCacheSet(key, value) {
+  getMapData(this, key).set(key, value);
+  return this;
+}
+
+// Add methods to `MapCache`.
+MapCache.prototype.clear = mapCacheClear;
+MapCache.prototype['delete'] = mapCacheDelete;
+MapCache.prototype.get = mapCacheGet;
+MapCache.prototype.has = mapCacheHas;
+MapCache.prototype.set = mapCacheSet;
+
+/**
+ *
+ * Creates an array cache object to store unique values.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [values] The values to cache.
+ */
+function SetCache(values) {
+  var index = -1,
+      length = values ? values.length : 0;
+
+  this.__data__ = new MapCache;
+  while (++index < length) {
+    this.add(values[index]);
+  }
+}
+
+/**
+ * Adds `value` to the array cache.
+ *
+ * @private
+ * @name add
+ * @memberOf SetCache
+ * @alias push
+ * @param {*} value The value to cache.
+ * @returns {Object} Returns the cache instance.
+ */
+function setCacheAdd(value) {
+  this.__data__.set(value, HASH_UNDEFINED);
+  return this;
+}
+
+/**
+ * Checks if `value` is in the array cache.
+ *
+ * @private
+ * @name has
+ * @memberOf SetCache
+ * @param {*} value The value to search for.
+ * @returns {number} Returns `true` if `value` is found, else `false`.
+ */
+function setCacheHas(value) {
+  return this.__data__.has(value);
+}
+
+// Add methods to `SetCache`.
+SetCache.prototype.add = SetCache.prototype.push = setCacheAdd;
+SetCache.prototype.has = setCacheHas;
+
+/**
+ * Gets the index at which the `key` is found in `array` of key-value pairs.
+ *
+ * @private
+ * @param {Array} array The array to inspect.
+ * @param {*} key The key to search for.
+ * @returns {number} Returns the index of the matched value, else `-1`.
+ */
+function assocIndexOf(array, key) {
+  var length = array.length;
+  while (length--) {
+    if (eq(array[length][0], key)) {
+      return length;
+    }
+  }
+  return -1;
+}
+
+/**
+ * The base implementation of `_.isNative` without bad shim checks.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a native function,
+ *  else `false`.
+ */
+function baseIsNative(value) {
+  if (!isObject(value) || isMasked(value)) {
+    return false;
+  }
+  var pattern = (isFunction(value) || isHostObject(value)) ? reIsNative : reIsHostCtor;
+  return pattern.test(toSource(value));
+}
+
+/**
+ * The base implementation of `_.uniqBy` without support for iteratee shorthands.
+ *
+ * @private
+ * @param {Array} array The array to inspect.
+ * @param {Function} [iteratee] The iteratee invoked per element.
+ * @param {Function} [comparator] The comparator invoked per element.
+ * @returns {Array} Returns the new duplicate free array.
+ */
+function baseUniq(array, iteratee, comparator) {
+  var index = -1,
+      includes = arrayIncludes,
+      length = array.length,
+      isCommon = true,
+      result = [],
+      seen = result;
+
+  if (comparator) {
+    isCommon = false;
+    includes = arrayIncludesWith;
+  }
+  else if (length >= LARGE_ARRAY_SIZE) {
+    var set = iteratee ? null : createSet(array);
+    if (set) {
+      return setToArray(set);
+    }
+    isCommon = false;
+    includes = cacheHas;
+    seen = new SetCache;
+  }
+  else {
+    seen = iteratee ? [] : result;
+  }
+  outer:
+  while (++index < length) {
+    var value = array[index],
+        computed = iteratee ? iteratee(value) : value;
+
+    value = (comparator || value !== 0) ? value : 0;
+    if (isCommon && computed === computed) {
+      var seenIndex = seen.length;
+      while (seenIndex--) {
+        if (seen[seenIndex] === computed) {
+          continue outer;
+        }
+      }
+      if (iteratee) {
+        seen.push(computed);
+      }
+      result.push(value);
+    }
+    else if (!includes(seen, computed, comparator)) {
+      if (seen !== result) {
+        seen.push(computed);
+      }
+      result.push(value);
+    }
+  }
+  return result;
+}
+
+/**
+ * Creates a set object of `values`.
+ *
+ * @private
+ * @param {Array} values The values to add to the set.
+ * @returns {Object} Returns the new set.
+ */
+var createSet = !(Set && (1 / setToArray(new Set([,-0]))[1]) == INFINITY) ? noop : function(values) {
+  return new Set(values);
+};
+
+/**
+ * Gets the data for `map`.
+ *
+ * @private
+ * @param {Object} map The map to query.
+ * @param {string} key The reference key.
+ * @returns {*} Returns the map data.
+ */
+function getMapData(map, key) {
+  var data = map.__data__;
+  return isKeyable(key)
+    ? data[typeof key == 'string' ? 'string' : 'hash']
+    : data.map;
+}
+
+/**
+ * Gets the native function at `key` of `object`.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @param {string} key The key of the method to get.
+ * @returns {*} Returns the function if it's native, else `undefined`.
+ */
+function getNative(object, key) {
+  var value = getValue(object, key);
+  return baseIsNative(value) ? value : undefined;
+}
+
+/**
+ * Checks if `value` is suitable for use as unique object key.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is suitable, else `false`.
+ */
+function isKeyable(value) {
+  var type = typeof value;
+  return (type == 'string' || type == 'number' || type == 'symbol' || type == 'boolean')
+    ? (value !== '__proto__')
+    : (value === null);
+}
+
+/**
+ * Checks if `func` has its source masked.
+ *
+ * @private
+ * @param {Function} func The function to check.
+ * @returns {boolean} Returns `true` if `func` is masked, else `false`.
+ */
+function isMasked(func) {
+  return !!maskSrcKey && (maskSrcKey in func);
+}
+
+/**
+ * Converts `func` to its source code.
+ *
+ * @private
+ * @param {Function} func The function to process.
+ * @returns {string} Returns the source code.
+ */
+function toSource(func) {
+  if (func != null) {
+    try {
+      return funcToString.call(func);
+    } catch (e) {}
+    try {
+      return (func + '');
+    } catch (e) {}
+  }
+  return '';
+}
+
+/**
+ * Creates a duplicate-free version of an array, using
+ * [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
+ * for equality comparisons, in which only the first occurrence of each
+ * element is kept.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Array
+ * @param {Array} array The array to inspect.
+ * @returns {Array} Returns the new duplicate free array.
+ * @example
+ *
+ * _.uniq([2, 1, 2]);
+ * // => [2, 1]
+ */
+function uniq(array) {
+  return (array && array.length)
+    ? baseUniq(array)
+    : [];
+}
+
+/**
+ * Performs a
+ * [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
+ * comparison between two values to determine if they are equivalent.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to compare.
+ * @param {*} other The other value to compare.
+ * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
+ * @example
+ *
+ * var object = { 'a': 1 };
+ * var other = { 'a': 1 };
+ *
+ * _.eq(object, object);
+ * // => true
+ *
+ * _.eq(object, other);
+ * // => false
+ *
+ * _.eq('a', 'a');
+ * // => true
+ *
+ * _.eq('a', Object('a'));
+ * // => false
+ *
+ * _.eq(NaN, NaN);
+ * // => true
+ */
+function eq(value, other) {
+  return value === other || (value !== value && other !== other);
+}
+
+/**
+ * Checks if `value` is classified as a `Function` object.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a function, else `false`.
+ * @example
+ *
+ * _.isFunction(_);
+ * // => true
+ *
+ * _.isFunction(/abc/);
+ * // => false
+ */
+function isFunction(value) {
+  // The use of `Object#toString` avoids issues with the `typeof` operator
+  // in Safari 8-9 which returns 'object' for typed array and other constructors.
+  var tag = isObject(value) ? objectToString.call(value) : '';
+  return tag == funcTag || tag == genTag;
+}
+
+/**
+ * Checks if `value` is the
+ * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
+ * of `Object`. (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an object, else `false`.
+ * @example
+ *
+ * _.isObject({});
+ * // => true
+ *
+ * _.isObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isObject(_.noop);
+ * // => true
+ *
+ * _.isObject(null);
+ * // => false
+ */
+function isObject(value) {
+  var type = typeof value;
+  return !!value && (type == 'object' || type == 'function');
+}
+
+/**
+ * This method returns `undefined`.
+ *
+ * @static
+ * @memberOf _
+ * @since 2.3.0
+ * @category Util
+ * @example
+ *
+ * _.times(2, _.noop);
+ * // => [undefined, undefined]
+ */
+function noop() {
+  // No operation performed.
+}
+
+module.exports = uniq;
+
+
+/***/ }),
 /* 127 */,
 /* 128 */,
-/* 129 */,
+/* 129 */
+/***/ (function(module) {
+
+module.exports = require("child_process");
+
+/***/ }),
 /* 130 */,
 /* 131 */,
 /* 132 */,
-/* 133 */,
+/* 133 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const agile_1 = __webpack_require__(448);
+const issue_1 = __webpack_require__(524);
+class ReducedSprintImpl {
+    constructor() {
+        this.id = '';
+        this.name = '';
+        this.goal = '';
+        this.start = 0;
+        this.finish = 0;
+        this.archived = false;
+        this.unresolvedIssuesCount = 0;
+        this.previousSprint = undefined;
+    }
+}
+exports.ReducedSprintImpl = ReducedSprintImpl;
+class SprintImpl extends ReducedSprintImpl {
+    constructor() {
+        super(...arguments);
+        this.agile = new agile_1.ReducedAgileImpl();
+        this.issues = [new issue_1.ReducedIssueImpl()];
+        this.isDefault = false;
+    }
+}
+exports.SprintImpl = SprintImpl;
+
+
+/***/ }),
 /* 134 */,
-/* 135 */,
+/* 135 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+
+var url = __webpack_require__(835)
+var tunnel = __webpack_require__(243)
+
+var defaultProxyHeaderWhiteList = [
+  'accept',
+  'accept-charset',
+  'accept-encoding',
+  'accept-language',
+  'accept-ranges',
+  'cache-control',
+  'content-encoding',
+  'content-language',
+  'content-location',
+  'content-md5',
+  'content-range',
+  'content-type',
+  'connection',
+  'date',
+  'expect',
+  'max-forwards',
+  'pragma',
+  'referer',
+  'te',
+  'user-agent',
+  'via'
+]
+
+var defaultProxyHeaderExclusiveList = [
+  'proxy-authorization'
+]
+
+function constructProxyHost (uriObject) {
+  var port = uriObject.port
+  var protocol = uriObject.protocol
+  var proxyHost = uriObject.hostname + ':'
+
+  if (port) {
+    proxyHost += port
+  } else if (protocol === 'https:') {
+    proxyHost += '443'
+  } else {
+    proxyHost += '80'
+  }
+
+  return proxyHost
+}
+
+function constructProxyHeaderWhiteList (headers, proxyHeaderWhiteList) {
+  var whiteList = proxyHeaderWhiteList
+    .reduce(function (set, header) {
+      set[header.toLowerCase()] = true
+      return set
+    }, {})
+
+  return Object.keys(headers)
+    .filter(function (header) {
+      return whiteList[header.toLowerCase()]
+    })
+    .reduce(function (set, header) {
+      set[header] = headers[header]
+      return set
+    }, {})
+}
+
+function constructTunnelOptions (request, proxyHeaders) {
+  var proxy = request.proxy
+
+  var tunnelOptions = {
+    proxy: {
+      host: proxy.hostname,
+      port: +proxy.port,
+      proxyAuth: proxy.auth,
+      headers: proxyHeaders
+    },
+    headers: request.headers,
+    ca: request.ca,
+    cert: request.cert,
+    key: request.key,
+    passphrase: request.passphrase,
+    pfx: request.pfx,
+    ciphers: request.ciphers,
+    rejectUnauthorized: request.rejectUnauthorized,
+    secureOptions: request.secureOptions,
+    secureProtocol: request.secureProtocol
+  }
+
+  return tunnelOptions
+}
+
+function constructTunnelFnName (uri, proxy) {
+  var uriProtocol = (uri.protocol === 'https:' ? 'https' : 'http')
+  var proxyProtocol = (proxy.protocol === 'https:' ? 'Https' : 'Http')
+  return [uriProtocol, proxyProtocol].join('Over')
+}
+
+function getTunnelFn (request) {
+  var uri = request.uri
+  var proxy = request.proxy
+  var tunnelFnName = constructTunnelFnName(uri, proxy)
+  return tunnel[tunnelFnName]
+}
+
+function Tunnel (request) {
+  this.request = request
+  this.proxyHeaderWhiteList = defaultProxyHeaderWhiteList
+  this.proxyHeaderExclusiveList = []
+  if (typeof request.tunnel !== 'undefined') {
+    this.tunnelOverride = request.tunnel
+  }
+}
+
+Tunnel.prototype.isEnabled = function () {
+  var self = this
+  var request = self.request
+    // Tunnel HTTPS by default. Allow the user to override this setting.
+
+  // If self.tunnelOverride is set (the user specified a value), use it.
+  if (typeof self.tunnelOverride !== 'undefined') {
+    return self.tunnelOverride
+  }
+
+  // If the destination is HTTPS, tunnel.
+  if (request.uri.protocol === 'https:') {
+    return true
+  }
+
+  // Otherwise, do not use tunnel.
+  return false
+}
+
+Tunnel.prototype.setup = function (options) {
+  var self = this
+  var request = self.request
+
+  options = options || {}
+
+  if (typeof request.proxy === 'string') {
+    request.proxy = url.parse(request.proxy)
+  }
+
+  if (!request.proxy || !request.tunnel) {
+    return false
+  }
+
+  // Setup Proxy Header Exclusive List and White List
+  if (options.proxyHeaderWhiteList) {
+    self.proxyHeaderWhiteList = options.proxyHeaderWhiteList
+  }
+  if (options.proxyHeaderExclusiveList) {
+    self.proxyHeaderExclusiveList = options.proxyHeaderExclusiveList
+  }
+
+  var proxyHeaderExclusiveList = self.proxyHeaderExclusiveList.concat(defaultProxyHeaderExclusiveList)
+  var proxyHeaderWhiteList = self.proxyHeaderWhiteList.concat(proxyHeaderExclusiveList)
+
+  // Setup Proxy Headers and Proxy Headers Host
+  // Only send the Proxy White Listed Header names
+  var proxyHeaders = constructProxyHeaderWhiteList(request.headers, proxyHeaderWhiteList)
+  proxyHeaders.host = constructProxyHost(request.uri)
+
+  proxyHeaderExclusiveList.forEach(request.removeHeader, request)
+
+  // Set Agent from Tunnel Data
+  var tunnelFn = getTunnelFn(request)
+  var tunnelOptions = constructTunnelOptions(request, proxyHeaders)
+  request.agent = tunnelFn(tunnelOptions)
+
+  return true
+}
+
+Tunnel.defaultProxyHeaderWhiteList = defaultProxyHeaderWhiteList
+Tunnel.defaultProxyHeaderExclusiveList = defaultProxyHeaderExclusiveList
+exports.Tunnel = Tunnel
+
+
+/***/ }),
 /* 136 */,
 /* 137 */,
 /* 138 */,
@@ -2223,42 +4051,405 @@ module.exports = function nodeRNG() {
 
 /***/ }),
 /* 140 */,
-/* 141 */,
-/* 142 */,
+/* 141 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+
+var net = __webpack_require__(631);
+var tls = __webpack_require__(16);
+var http = __webpack_require__(605);
+var https = __webpack_require__(211);
+var events = __webpack_require__(614);
+var assert = __webpack_require__(357);
+var util = __webpack_require__(669);
+
+
+exports.httpOverHttp = httpOverHttp;
+exports.httpsOverHttp = httpsOverHttp;
+exports.httpOverHttps = httpOverHttps;
+exports.httpsOverHttps = httpsOverHttps;
+
+
+function httpOverHttp(options) {
+  var agent = new TunnelingAgent(options);
+  agent.request = http.request;
+  return agent;
+}
+
+function httpsOverHttp(options) {
+  var agent = new TunnelingAgent(options);
+  agent.request = http.request;
+  agent.createSocket = createSecureSocket;
+  agent.defaultPort = 443;
+  return agent;
+}
+
+function httpOverHttps(options) {
+  var agent = new TunnelingAgent(options);
+  agent.request = https.request;
+  return agent;
+}
+
+function httpsOverHttps(options) {
+  var agent = new TunnelingAgent(options);
+  agent.request = https.request;
+  agent.createSocket = createSecureSocket;
+  agent.defaultPort = 443;
+  return agent;
+}
+
+
+function TunnelingAgent(options) {
+  var self = this;
+  self.options = options || {};
+  self.proxyOptions = self.options.proxy || {};
+  self.maxSockets = self.options.maxSockets || http.Agent.defaultMaxSockets;
+  self.requests = [];
+  self.sockets = [];
+
+  self.on('free', function onFree(socket, host, port, localAddress) {
+    var options = toOptions(host, port, localAddress);
+    for (var i = 0, len = self.requests.length; i < len; ++i) {
+      var pending = self.requests[i];
+      if (pending.host === options.host && pending.port === options.port) {
+        // Detect the request to connect same origin server,
+        // reuse the connection.
+        self.requests.splice(i, 1);
+        pending.request.onSocket(socket);
+        return;
+      }
+    }
+    socket.destroy();
+    self.removeSocket(socket);
+  });
+}
+util.inherits(TunnelingAgent, events.EventEmitter);
+
+TunnelingAgent.prototype.addRequest = function addRequest(req, host, port, localAddress) {
+  var self = this;
+  var options = mergeOptions({request: req}, self.options, toOptions(host, port, localAddress));
+
+  if (self.sockets.length >= this.maxSockets) {
+    // We are over limit so we'll add it to the queue.
+    self.requests.push(options);
+    return;
+  }
+
+  // If we are under maxSockets create a new one.
+  self.createSocket(options, function(socket) {
+    socket.on('free', onFree);
+    socket.on('close', onCloseOrRemove);
+    socket.on('agentRemove', onCloseOrRemove);
+    req.onSocket(socket);
+
+    function onFree() {
+      self.emit('free', socket, options);
+    }
+
+    function onCloseOrRemove(err) {
+      self.removeSocket(socket);
+      socket.removeListener('free', onFree);
+      socket.removeListener('close', onCloseOrRemove);
+      socket.removeListener('agentRemove', onCloseOrRemove);
+    }
+  });
+};
+
+TunnelingAgent.prototype.createSocket = function createSocket(options, cb) {
+  var self = this;
+  var placeholder = {};
+  self.sockets.push(placeholder);
+
+  var connectOptions = mergeOptions({}, self.proxyOptions, {
+    method: 'CONNECT',
+    path: options.host + ':' + options.port,
+    agent: false,
+    headers: {
+      host: options.host + ':' + options.port
+    }
+  });
+  if (options.localAddress) {
+    connectOptions.localAddress = options.localAddress;
+  }
+  if (connectOptions.proxyAuth) {
+    connectOptions.headers = connectOptions.headers || {};
+    connectOptions.headers['Proxy-Authorization'] = 'Basic ' +
+        new Buffer(connectOptions.proxyAuth).toString('base64');
+  }
+
+  debug('making CONNECT request');
+  var connectReq = self.request(connectOptions);
+  connectReq.useChunkedEncodingByDefault = false; // for v0.6
+  connectReq.once('response', onResponse); // for v0.6
+  connectReq.once('upgrade', onUpgrade);   // for v0.6
+  connectReq.once('connect', onConnect);   // for v0.7 or later
+  connectReq.once('error', onError);
+  connectReq.end();
+
+  function onResponse(res) {
+    // Very hacky. This is necessary to avoid http-parser leaks.
+    res.upgrade = true;
+  }
+
+  function onUpgrade(res, socket, head) {
+    // Hacky.
+    process.nextTick(function() {
+      onConnect(res, socket, head);
+    });
+  }
+
+  function onConnect(res, socket, head) {
+    connectReq.removeAllListeners();
+    socket.removeAllListeners();
+
+    if (res.statusCode !== 200) {
+      debug('tunneling socket could not be established, statusCode=%d',
+        res.statusCode);
+      socket.destroy();
+      var error = new Error('tunneling socket could not be established, ' +
+        'statusCode=' + res.statusCode);
+      error.code = 'ECONNRESET';
+      options.request.emit('error', error);
+      self.removeSocket(placeholder);
+      return;
+    }
+    if (head.length > 0) {
+      debug('got illegal response body from proxy');
+      socket.destroy();
+      var error = new Error('got illegal response body from proxy');
+      error.code = 'ECONNRESET';
+      options.request.emit('error', error);
+      self.removeSocket(placeholder);
+      return;
+    }
+    debug('tunneling connection has established');
+    self.sockets[self.sockets.indexOf(placeholder)] = socket;
+    return cb(socket);
+  }
+
+  function onError(cause) {
+    connectReq.removeAllListeners();
+
+    debug('tunneling socket could not be established, cause=%s\n',
+          cause.message, cause.stack);
+    var error = new Error('tunneling socket could not be established, ' +
+                          'cause=' + cause.message);
+    error.code = 'ECONNRESET';
+    options.request.emit('error', error);
+    self.removeSocket(placeholder);
+  }
+};
+
+TunnelingAgent.prototype.removeSocket = function removeSocket(socket) {
+  var pos = this.sockets.indexOf(socket)
+  if (pos === -1) {
+    return;
+  }
+  this.sockets.splice(pos, 1);
+
+  var pending = this.requests.shift();
+  if (pending) {
+    // If we have pending requests and a socket gets closed a new one
+    // needs to be created to take over in the pool for the one that closed.
+    this.createSocket(pending, function(socket) {
+      pending.request.onSocket(socket);
+    });
+  }
+};
+
+function createSecureSocket(options, cb) {
+  var self = this;
+  TunnelingAgent.prototype.createSocket.call(self, options, function(socket) {
+    var hostHeader = options.request.getHeader('host');
+    var tlsOptions = mergeOptions({}, self.options, {
+      socket: socket,
+      servername: hostHeader ? hostHeader.replace(/:.*$/, '') : options.host
+    });
+
+    // 0 is dummy port for v0.6
+    var secureSocket = tls.connect(0, tlsOptions);
+    self.sockets[self.sockets.indexOf(socket)] = secureSocket;
+    cb(secureSocket);
+  });
+}
+
+
+function toOptions(host, port, localAddress) {
+  if (typeof host === 'string') { // since v0.10
+    return {
+      host: host,
+      port: port,
+      localAddress: localAddress
+    };
+  }
+  return host; // for v0.11 or later
+}
+
+function mergeOptions(target) {
+  for (var i = 1, len = arguments.length; i < len; ++i) {
+    var overrides = arguments[i];
+    if (typeof overrides === 'object') {
+      var keys = Object.keys(overrides);
+      for (var j = 0, keyLen = keys.length; j < keyLen; ++j) {
+        var k = keys[j];
+        if (overrides[k] !== undefined) {
+          target[k] = overrides[k];
+        }
+      }
+    }
+  }
+  return target;
+}
+
+
+var debug;
+if (process.env.NODE_DEBUG && /\btunnel\b/.test(process.env.NODE_DEBUG)) {
+  debug = function() {
+    var args = Array.prototype.slice.call(arguments);
+    if (typeof args[0] === 'string') {
+      args[0] = 'TUNNEL: ' + args[0];
+    } else {
+      args.unshift('TUNNEL:');
+    }
+    console.error.apply(console, args);
+  }
+} else {
+  debug = function() {};
+}
+exports.debug = debug; // for test
+
+
+/***/ }),
+/* 142 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const format = __webpack_require__(279);
+const utils_1 = __webpack_require__(229);
+class BaseEndpoint {
+    constructor(client) {
+        this.client = client;
+    }
+    format(template, values) {
+        return format(template, values);
+    }
+    toPromise(request) {
+        return Promise.resolve(request.then(response => {
+            return response;
+        }).catch(error => {
+            return Promise.reject(error);
+        }));
+    }
+    getResource(url, params = {}) {
+        return this.toPromise(this.client.get(url, params));
+    }
+    postResource(url, params = {}) {
+        return this.toPromise(this.client.post(url, params));
+    }
+    getResourceWithFields(url, implementation, options = {}) {
+        return this.getResource(url, {
+            qs: Object.assign({ fields: utils_1.generateFieldsQuery(new implementation()) }, (options.qs || {}))
+        });
+    }
+    postResourceWithFields(url, implementation, options = {}) {
+        return this.postResource(url, Object.assign({}, options, { qs: Object.assign({ fields: utils_1.generateFieldsQuery(new implementation()) }, (options.qs || {})) }));
+    }
+}
+exports.BaseEndpoint = BaseEndpoint;
+
+
+/***/ }),
 /* 143 */
-/***/ (function(module) {
+/***/ (function(module, __unusedexports, __webpack_require__) {
 
-/**
- * Checks if `value` is classified as an `Array` object.
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an array, else `false`.
- * @example
- *
- * _.isArray([1, 2, 3]);
- * // => true
- *
- * _.isArray(document.body.children);
- * // => false
- *
- * _.isArray('abc');
- * // => false
- *
- * _.isArray(_.noop);
- * // => false
- */
-var isArray = Array.isArray;
+module.exports = withAuthorizationPrefix;
 
-module.exports = isArray;
+const atob = __webpack_require__(368);
+
+const REGEX_IS_BASIC_AUTH = /^[\w-]+:/;
+
+function withAuthorizationPrefix(authorization) {
+  if (/^(basic|bearer|token) /i.test(authorization)) {
+    return authorization;
+  }
+
+  try {
+    if (REGEX_IS_BASIC_AUTH.test(atob(authorization))) {
+      return `basic ${authorization}`;
+    }
+  } catch (error) {}
+
+  if (authorization.split(/\./).length === 3) {
+    return `bearer ${authorization}`;
+  }
+
+  return `token ${authorization}`;
+}
 
 
 /***/ }),
 /* 144 */,
-/* 145 */,
+/* 145 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+const pump = __webpack_require__(453);
+const bufferStream = __webpack_require__(966);
+
+class MaxBufferError extends Error {
+	constructor() {
+		super('maxBuffer exceeded');
+		this.name = 'MaxBufferError';
+	}
+}
+
+function getStream(inputStream, options) {
+	if (!inputStream) {
+		return Promise.reject(new Error('Expected a stream'));
+	}
+
+	options = Object.assign({maxBuffer: Infinity}, options);
+
+	const {maxBuffer} = options;
+
+	let stream;
+	return new Promise((resolve, reject) => {
+		const rejectPromise = error => {
+			if (error) { // A null check
+				error.bufferedData = stream.getBufferedValue();
+			}
+			reject(error);
+		};
+
+		stream = pump(inputStream, bufferStream(options), error => {
+			if (error) {
+				rejectPromise(error);
+				return;
+			}
+
+			resolve();
+		});
+
+		stream.on('data', () => {
+			if (stream.getBufferedLength() > maxBuffer) {
+				rejectPromise(new MaxBufferError());
+			}
+		});
+	}).then(() => stream.getBufferedValue());
+}
+
+module.exports = getStream;
+module.exports.buffer = (stream, options) => getStream(stream, Object.assign({}, options, {encoding: 'buffer'}));
+module.exports.array = (stream, options) => getStream(stream, Object.assign({}, options, {array: true}));
+module.exports.MaxBufferError = MaxBufferError;
+
+
+/***/ }),
 /* 146 */,
 /* 147 */
 /***/ (function(module) {
@@ -2303,7 +4494,19 @@ function state(list, sortMethod)
 
 
 /***/ }),
-/* 148 */,
+/* 148 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = paginatePlugin;
+
+const { paginateRest } = __webpack_require__(299);
+
+function paginatePlugin(octokit) {
+  Object.assign(octokit, paginateRest(octokit));
+}
+
+
+/***/ }),
 /* 149 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
@@ -2358,7 +4561,32 @@ Promise.prototype.settle = function () {
 
 
 /***/ }),
-/* 150 */,
+/* 150 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const issue_1 = __webpack_require__(524);
+class CommandListImpl {
+    constructor() {
+        this.id = '';
+        this.caret = 0;
+        this.commands = [];
+        this.comment = '';
+        this.issues = [new issue_1.ReducedIssueImpl()];
+        this.query = '';
+        this.runAs = '';
+        this.silent = false;
+        this.suggestions = [];
+        this.usesMarkdown = false;
+        this.visibility = null;
+    }
+}
+exports.CommandListImpl = CommandListImpl;
+
+
+/***/ }),
 /* 151 */,
 /* 152 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
@@ -2646,15 +4874,154 @@ function runJob(iterator, key, item, callback)
 
 
 /***/ }),
-/* 158 */
-/***/ (function(module) {
+/* 158 */,
+/* 159 */,
+/* 160 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
 
-module.exports = {"$id":"header.json#","$schema":"http://json-schema.org/draft-06/schema#","type":"object","required":["name","value"],"properties":{"name":{"type":"string"},"value":{"type":"string"},"comment":{"type":"string"}}};
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const user_1 = __webpack_require__(406);
+const issue_1 = __webpack_require__(524);
+// TODO: add attachment and visibilty typings
+class IssueCommentImpl {
+    constructor() {
+        this.author = new user_1.ReducedUserImpl();
+        this.deleted = false;
+        this.issue = new issue_1.ReducedIssueImpl();
+        this.attachments = [];
+        this.created = 0;
+        this.id = '';
+        this.text = '';
+        this.textPreview = '';
+        this.updated = 0;
+        this.usesMarkdown = false;
+        this.visibility = null;
+    }
+}
+exports.IssueCommentImpl = IssueCommentImpl;
+
 
 /***/ }),
-/* 159 */,
-/* 160 */,
-/* 161 */,
+/* 161 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+// Copyright 2012 Joyent, Inc.  All rights reserved.
+
+var assert = __webpack_require__(757);
+var sshpk = __webpack_require__(650);
+var util = __webpack_require__(669);
+
+var HASH_ALGOS = {
+  'sha1': true,
+  'sha256': true,
+  'sha512': true
+};
+
+var PK_ALGOS = {
+  'rsa': true,
+  'dsa': true,
+  'ecdsa': true
+};
+
+function HttpSignatureError(message, caller) {
+  if (Error.captureStackTrace)
+    Error.captureStackTrace(this, caller || HttpSignatureError);
+
+  this.message = message;
+  this.name = caller.name;
+}
+util.inherits(HttpSignatureError, Error);
+
+function InvalidAlgorithmError(message) {
+  HttpSignatureError.call(this, message, InvalidAlgorithmError);
+}
+util.inherits(InvalidAlgorithmError, HttpSignatureError);
+
+function validateAlgorithm(algorithm) {
+  var alg = algorithm.toLowerCase().split('-');
+
+  if (alg.length !== 2) {
+    throw (new InvalidAlgorithmError(alg[0].toUpperCase() + ' is not a ' +
+      'valid algorithm'));
+  }
+
+  if (alg[0] !== 'hmac' && !PK_ALGOS[alg[0]]) {
+    throw (new InvalidAlgorithmError(alg[0].toUpperCase() + ' type keys ' +
+      'are not supported'));
+  }
+
+  if (!HASH_ALGOS[alg[1]]) {
+    throw (new InvalidAlgorithmError(alg[1].toUpperCase() + ' is not a ' +
+      'supported hash algorithm'));
+  }
+
+  return (alg);
+}
+
+///--- API
+
+module.exports = {
+
+  HASH_ALGOS: HASH_ALGOS,
+  PK_ALGOS: PK_ALGOS,
+
+  HttpSignatureError: HttpSignatureError,
+  InvalidAlgorithmError: InvalidAlgorithmError,
+
+  validateAlgorithm: validateAlgorithm,
+
+  /**
+   * Converts an OpenSSH public key (rsa only) to a PKCS#8 PEM file.
+   *
+   * The intent of this module is to interoperate with OpenSSL only,
+   * specifically the node crypto module's `verify` method.
+   *
+   * @param {String} key an OpenSSH public key.
+   * @return {String} PEM encoded form of the RSA public key.
+   * @throws {TypeError} on bad input.
+   * @throws {Error} on invalid ssh key formatted data.
+   */
+  sshKeyToPEM: function sshKeyToPEM(key) {
+    assert.string(key, 'ssh_key');
+
+    var k = sshpk.parseKey(key, 'ssh');
+    return (k.toString('pem'));
+  },
+
+
+  /**
+   * Generates an OpenSSH fingerprint from an ssh public key.
+   *
+   * @param {String} key an OpenSSH public key.
+   * @return {String} key fingerprint.
+   * @throws {TypeError} on bad input.
+   * @throws {Error} if what you passed doesn't look like an ssh public key.
+   */
+  fingerprint: function fingerprint(key) {
+    assert.string(key, 'ssh_key');
+
+    var k = sshpk.parseKey(key, 'ssh');
+    return (k.fingerprint('md5').toString('hex'));
+  },
+
+  /**
+   * Converts a PKGCS#8 PEM file to an OpenSSH public key (rsa)
+   *
+   * The reverse of the above function.
+   */
+  pemToRsaSSHKey: function pemToRsaSSHKey(pem, comment) {
+    assert.equal('string', typeof (pem), 'typeof pem');
+
+    var k = sshpk.parseKey(pem, 'pem');
+    k.comment = comment;
+    return (k.toString('ssh'));
+  }
+};
+
+
+/***/ }),
 /* 162 */
 /***/ (function(module) {
 
@@ -2662,11 +5029,84 @@ module.exports = {"$id":"content.json#","$schema":"http://json-schema.org/draft-
 
 /***/ }),
 /* 163 */,
-/* 164 */,
+/* 164 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const user_1 = __webpack_require__(406);
+class ReducedIssueTagImpl {
+    constructor() {
+        this.name = '';
+        this.id = '';
+    }
+}
+exports.ReducedIssueTagImpl = ReducedIssueTagImpl;
+class IssueTagImpl extends ReducedIssueTagImpl {
+    constructor() {
+        super(...arguments);
+        // visibleFor: UserGroup;
+        // updateableBy: UserGroup;
+        this.untagOnResolve = false;
+        this.owner = new user_1.ReducedUserImpl();
+    }
+}
+exports.IssueTagImpl = IssueTagImpl;
+
+
+/***/ }),
 /* 165 */,
 /* 166 */,
 /* 167 */,
-/* 168 */,
+/* 168 */
+/***/ (function(module) {
+
+"use strict";
+
+const alias = ['stdin', 'stdout', 'stderr'];
+
+const hasAlias = opts => alias.some(x => Boolean(opts[x]));
+
+module.exports = opts => {
+	if (!opts) {
+		return null;
+	}
+
+	if (opts.stdio && hasAlias(opts)) {
+		throw new Error(`It's not possible to provide \`stdio\` in combination with one of ${alias.map(x => `\`${x}\``).join(', ')}`);
+	}
+
+	if (typeof opts.stdio === 'string') {
+		return opts.stdio;
+	}
+
+	const stdio = opts.stdio || [];
+
+	if (!Array.isArray(stdio)) {
+		throw new TypeError(`Expected \`stdio\` to be of type \`string\` or \`Array\`, got \`${typeof stdio}\``);
+	}
+
+	const result = [];
+	const len = Math.max(stdio.length, alias.length);
+
+	for (let i = 0; i < len; i++) {
+		let value = null;
+
+		if (stdio[i] !== undefined) {
+			value = stdio[i];
+		} else if (opts[alias[i]] !== undefined) {
+			value = opts[alias[i]];
+		}
+
+		result[i] = value;
+	}
+
+	return result;
+};
+
+
+/***/ }),
 /* 169 */,
 /* 170 */,
 /* 171 */,
@@ -2778,7 +5218,43 @@ function DoublyLinkedNode(key, val) {
 
 
 /***/ }),
-/* 179 */,
+/* 179 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const base_1 = __webpack_require__(142);
+const comment_1 = __webpack_require__(160);
+exports.CommentPaths = {
+    comment: '/issues/{issueId}/comments/{commentId}',
+    comments: '/issues/{issueId}/comments'
+};
+class CommentEndpoint extends base_1.BaseEndpoint {
+    all(issueId, paginationOptions = {}) {
+        return this.getResourceWithFields(this.format(exports.CommentPaths.comments, { issueId }), comment_1.IssueCommentImpl, { qs: paginationOptions });
+    }
+    create(issueId, comment) {
+        return this.postResourceWithFields(this.format(exports.CommentPaths.comments, { issueId }), comment_1.IssueCommentImpl, {
+            body: comment
+        });
+    }
+    update(issueId, comment) {
+        return this.postResourceWithFields(this.format(exports.CommentPaths.comment, {
+            issueId,
+            commentId: comment.id
+        }), comment_1.IssueCommentImpl, {
+            body: comment
+        });
+    }
+    delete(issueId, commentId) {
+        return this.toPromise(this.client.delete(this.format(exports.CommentPaths.comment, { issueId, commentId })));
+    }
+}
+exports.CommentEndpoint = CommentEndpoint;
+
+
+/***/ }),
 /* 180 */,
 /* 181 */
 /***/ (function(module) {
@@ -2794,7 +5270,88 @@ module.exports = {"$id":"pageTimings.json#","$schema":"http://json-schema.org/dr
 /* 187 */,
 /* 188 */,
 /* 189 */,
-/* 190 */,
+/* 190 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = authenticationPlugin;
+
+const { createTokenAuth } = __webpack_require__(813);
+const { Deprecation } = __webpack_require__(692);
+const once = __webpack_require__(969);
+
+const beforeRequest = __webpack_require__(863);
+const requestError = __webpack_require__(293);
+const validate = __webpack_require__(954);
+const withAuthorizationPrefix = __webpack_require__(143);
+
+const deprecateAuthBasic = once((log, deprecation) => log.warn(deprecation));
+const deprecateAuthObject = once((log, deprecation) => log.warn(deprecation));
+
+function authenticationPlugin(octokit, options) {
+  // If `options.authStrategy` is set then use it and pass in `options.auth`
+  if (options.authStrategy) {
+    const auth = options.authStrategy(options.auth);
+    octokit.hook.wrap("request", auth.hook);
+    octokit.auth = auth;
+    return;
+  }
+
+  // If neither `options.authStrategy` nor `options.auth` are set, the `octokit` instance
+  // is unauthenticated. The `octokit.auth()` method is a no-op and no request hook is registred.
+  if (!options.auth) {
+    octokit.auth = () =>
+      Promise.resolve({
+        type: "unauthenticated"
+      });
+    return;
+  }
+
+  const isBasicAuthString =
+    typeof options.auth === "string" &&
+    /^basic/.test(withAuthorizationPrefix(options.auth));
+
+  // If only `options.auth` is set to a string, use the default token authentication strategy.
+  if (typeof options.auth === "string" && !isBasicAuthString) {
+    const auth = createTokenAuth(options.auth);
+    octokit.hook.wrap("request", auth.hook);
+    octokit.auth = auth;
+    return;
+  }
+
+  // Otherwise log a deprecation message
+  const [deprecationMethod, deprecationMessapge] = isBasicAuthString
+    ? [
+        deprecateAuthBasic,
+        'Setting the "new Octokit({ auth })" option to a Basic Auth string is deprecated. Use https://github.com/octokit/auth-basic.js instead. See (https://octokit.github.io/rest.js/#authentication)'
+      ]
+    : [
+        deprecateAuthObject,
+        'Setting the "new Octokit({ auth })" option to an object without also setting the "authStrategy" option is deprecated and will be removed in v17. See (https://octokit.github.io/rest.js/#authentication)'
+      ];
+  deprecationMethod(
+    octokit.log,
+    new Deprecation("[@octokit/rest] " + deprecationMessapge)
+  );
+
+  octokit.auth = () =>
+    Promise.resolve({
+      type: "deprecated",
+      message: deprecationMessapge
+    });
+
+  validate(options.auth);
+
+  const state = {
+    octokit,
+    auth: options.auth
+  };
+
+  octokit.hook.before("request", beforeRequest.bind(null, state));
+  octokit.hook.error("request", requestError.bind(null, state));
+}
+
+
+/***/ }),
 /* 191 */
 /***/ (function(module) {
 
@@ -5199,7 +7756,53 @@ nacl.setPRNG = function(fn) {
 
 
 /***/ }),
-/* 197 */,
+/* 197 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = isexe
+isexe.sync = sync
+
+var fs = __webpack_require__(747)
+
+function isexe (path, options, cb) {
+  fs.stat(path, function (er, stat) {
+    cb(er, er ? false : checkStat(stat, options))
+  })
+}
+
+function sync (path, options) {
+  return checkStat(fs.statSync(path), options)
+}
+
+function checkStat (stat, options) {
+  return stat.isFile() && checkMode(stat, options)
+}
+
+function checkMode (stat, options) {
+  var mod = stat.mode
+  var uid = stat.uid
+  var gid = stat.gid
+
+  var myUid = options.uid !== undefined ?
+    options.uid : process.getuid && process.getuid()
+  var myGid = options.gid !== undefined ?
+    options.gid : process.getgid && process.getgid()
+
+  var u = parseInt('100', 8)
+  var g = parseInt('010', 8)
+  var o = parseInt('001', 8)
+  var ug = u | g
+
+  var ret = (mod & o) ||
+    (mod & g) && gid === myGid ||
+    (mod & u) && uid === myUid ||
+    (mod & ug) && myUid === 0
+
+  return ret
+}
+
+
+/***/ }),
 /* 198 */,
 /* 199 */,
 /* 200 */,
@@ -5228,87 +7831,9 @@ module.exports = require("punycode");
 /***/ }),
 /* 214 */,
 /* 215 */
-/***/ (function(module, __unusedexports, __webpack_require__) {
+/***/ (function(module) {
 
-"use strict";
-/* eslint-disable node/no-deprecated-api */
-
-
-
-var buffer = __webpack_require__(293)
-var Buffer = buffer.Buffer
-
-var safer = {}
-
-var key
-
-for (key in buffer) {
-  if (!buffer.hasOwnProperty(key)) continue
-  if (key === 'SlowBuffer' || key === 'Buffer') continue
-  safer[key] = buffer[key]
-}
-
-var Safer = safer.Buffer = {}
-for (key in Buffer) {
-  if (!Buffer.hasOwnProperty(key)) continue
-  if (key === 'allocUnsafe' || key === 'allocUnsafeSlow') continue
-  Safer[key] = Buffer[key]
-}
-
-safer.Buffer.prototype = Buffer.prototype
-
-if (!Safer.from || Safer.from === Uint8Array.from) {
-  Safer.from = function (value, encodingOrOffset, length) {
-    if (typeof value === 'number') {
-      throw new TypeError('The "value" argument must not be of type number. Received type ' + typeof value)
-    }
-    if (value && typeof value.length === 'undefined') {
-      throw new TypeError('The first argument must be one of type string, Buffer, ArrayBuffer, Array, or Array-like Object. Received type ' + typeof value)
-    }
-    return Buffer(value, encodingOrOffset, length)
-  }
-}
-
-if (!Safer.alloc) {
-  Safer.alloc = function (size, fill, encoding) {
-    if (typeof size !== 'number') {
-      throw new TypeError('The "size" argument must be of type number. Received type ' + typeof size)
-    }
-    if (size < 0 || size >= 2 * (1 << 30)) {
-      throw new RangeError('The value "' + size + '" is invalid for option "size"')
-    }
-    var buf = Buffer(size)
-    if (!fill || fill.length === 0) {
-      buf.fill(0)
-    } else if (typeof encoding === 'string') {
-      buf.fill(fill, encoding)
-    } else {
-      buf.fill(fill)
-    }
-    return buf
-  }
-}
-
-if (!safer.kStringMaxLength) {
-  try {
-    safer.kStringMaxLength = process.binding('buffer').kStringMaxLength
-  } catch (e) {
-    // we can't determine kStringMaxLength in environments where process.binding
-    // is unsupported, so let's not set it
-  }
-}
-
-if (!safer.constants) {
-  safer.constants = {
-    MAX_LENGTH: safer.kMaxLength
-  }
-  if (safer.kStringMaxLength) {
-    safer.constants.MAX_STRING_LENGTH = safer.kStringMaxLength
-  }
-}
-
-module.exports = safer
-
+module.exports = {"_from":"@octokit/rest@^16.15.0","_id":"@octokit/rest@16.41.0","_inBundle":false,"_integrity":"sha512-qdXSdoI7RI+u04KR5FEv2UAo8kuCLH1l48mLCQu3gpMoCapmIXL0dGDjzhAbuQHRxkGz2zuvCKhskdMhy66Nww==","_location":"/@octokit/rest","_phantomChildren":{},"_requested":{"type":"range","registry":true,"raw":"@octokit/rest@^16.15.0","name":"@octokit/rest","escapedName":"@octokit%2frest","scope":"@octokit","rawSpec":"^16.15.0","saveSpec":null,"fetchSpec":"^16.15.0"},"_requiredBy":["/@actions/github"],"_resolved":"https://registry.npmjs.org/@octokit/rest/-/rest-16.41.0.tgz","_shasum":"28950d7bb854da3bf36bd317c95526ffbcb7b982","_spec":"@octokit/rest@^16.15.0","_where":"/Users/salmasov/Work/actions/notify-deploy-frontend-action/node_modules/@actions/github","author":{"name":"Gregor Martynus","url":"https://github.com/gr2m"},"bugs":{"url":"https://github.com/octokit/rest.js/issues"},"bundleDependencies":false,"bundlesize":[{"path":"./dist/octokit-rest.min.js.gz","maxSize":"33 kB"}],"contributors":[{"name":"Mike de Boer","email":"info@mikedeboer.nl"},{"name":"Fabian Jakobs","email":"fabian@c9.io"},{"name":"Joe Gallo","email":"joe@brassafrax.com"},{"name":"Gregor Martynus","url":"https://github.com/gr2m"}],"dependencies":{"@octokit/auth-token":"^2.4.0","@octokit/plugin-paginate-rest":"^1.1.1","@octokit/plugin-request-log":"^1.0.0","@octokit/plugin-rest-endpoint-methods":"2.1.3","@octokit/request":"^5.2.0","@octokit/request-error":"^1.0.2","atob-lite":"^2.0.0","before-after-hook":"^2.0.0","btoa-lite":"^1.0.0","deprecation":"^2.0.0","lodash.get":"^4.4.2","lodash.set":"^4.3.2","lodash.uniq":"^4.5.0","octokit-pagination-methods":"^1.1.0","once":"^1.4.0","universal-user-agent":"^4.0.0"},"deprecated":false,"description":"GitHub REST API client for Node.js","devDependencies":{"@gimenete/type-writer":"^0.1.3","@octokit/auth":"^1.1.1","@octokit/fixtures-server":"^5.0.6","@octokit/graphql":"^4.2.0","@types/node":"^13.1.0","bundlesize":"^0.18.0","chai":"^4.1.2","compression-webpack-plugin":"^3.1.0","cypress":"^3.0.0","glob":"^7.1.2","http-proxy-agent":"^4.0.0","lodash.camelcase":"^4.3.0","lodash.merge":"^4.6.1","lodash.upperfirst":"^4.3.1","lolex":"^5.1.2","mkdirp":"^1.0.0","mocha":"^7.0.1","mustache":"^4.0.0","nock":"^11.3.3","npm-run-all":"^4.1.2","nyc":"^15.0.0","prettier":"^1.14.2","proxy":"^1.0.0","semantic-release":"^17.0.0","sinon":"^8.0.0","sinon-chai":"^3.0.0","sort-keys":"^4.0.0","string-to-arraybuffer":"^1.0.0","string-to-jsdoc-comment":"^1.0.0","typescript":"^3.3.1","webpack":"^4.0.0","webpack-bundle-analyzer":"^3.0.0","webpack-cli":"^3.0.0"},"files":["index.js","index.d.ts","lib","plugins"],"homepage":"https://github.com/octokit/rest.js#readme","keywords":["octokit","github","rest","api-client"],"license":"MIT","name":"@octokit/rest","nyc":{"ignore":["test"]},"publishConfig":{"access":"public"},"release":{"publish":["@semantic-release/npm",{"path":"@semantic-release/github","assets":["dist/*","!dist/*.map.gz"]}]},"repository":{"type":"git","url":"git+https://github.com/octokit/rest.js.git"},"scripts":{"build":"npm-run-all build:*","build:browser":"npm-run-all build:browser:*","build:browser:development":"webpack --mode development --entry . --output-library=Octokit --output=./dist/octokit-rest.js --profile --json > dist/bundle-stats.json","build:browser:production":"webpack --mode production --entry . --plugin=compression-webpack-plugin --output-library=Octokit --output-path=./dist --output-filename=octokit-rest.min.js --devtool source-map","build:ts":"npm run -s update-endpoints:typescript","coverage":"nyc report --reporter=html && open coverage/index.html","generate-bundle-report":"webpack-bundle-analyzer dist/bundle-stats.json --mode=static --no-open --report dist/bundle-report.html","lint":"prettier --check '{lib,plugins,scripts,test}/**/*.{js,json,ts}' 'docs/*.{js,json}' 'docs/src/**/*' index.js README.md package.json","lint:fix":"prettier --write '{lib,plugins,scripts,test}/**/*.{js,json,ts}' 'docs/*.{js,json}' 'docs/src/**/*' index.js README.md package.json","postvalidate:ts":"tsc --noEmit --target es6 test/typescript-validate.ts","prebuild:browser":"mkdirp dist/","pretest":"npm run -s lint","prevalidate:ts":"npm run -s build:ts","start-fixtures-server":"octokit-fixtures-server","test":"nyc mocha test/mocha-node-setup.js \"test/*/**/*-test.js\"","test:browser":"cypress run --browser chrome","update-endpoints":"npm-run-all update-endpoints:*","update-endpoints:fetch-json":"node scripts/update-endpoints/fetch-json","update-endpoints:typescript":"node scripts/update-endpoints/typescript","validate:ts":"tsc --target es6 --noImplicitAny index.d.ts"},"types":"index.d.ts","version":"16.41.0"};
 
 /***/ }),
 /* 216 */,
@@ -5515,7 +8040,35 @@ module.exports = {"$id":"response.json#","$schema":"http://json-schema.org/draft
 /***/ }),
 /* 227 */,
 /* 228 */,
-/* 229 */,
+/* 229 */
+/***/ (function(__unusedmodule, exports) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const nestedField = (property, fields) => {
+    return `${property}(${fields.join(',')})`;
+};
+exports.generateFields = (obj) => {
+    return Object.getOwnPropertyNames(obj).map(f => {
+        const property = obj[f];
+        if (typeof property === 'object' && property) {
+            if (!Array.isArray(property)) {
+                return nestedField(f, exports.generateFields(property));
+            }
+            else if (property.length > 0) {
+                return nestedField(f, exports.generateFields(property[0]));
+            }
+        }
+        return f;
+    });
+};
+exports.generateFieldsQuery = (obj) => {
+    return exports.generateFields(obj).join(',');
+};
+
+
+/***/ }),
 /* 230 */,
 /* 231 */,
 /* 232 */,
@@ -7148,8 +9701,8 @@ module.exports = {
 	write: write
 };
 
-var assert = __webpack_require__(489);
-var Buffer = __webpack_require__(215).Buffer;
+var assert = __webpack_require__(757);
+var Buffer = __webpack_require__(481).Buffer;
 var utils = __webpack_require__(270);
 var Key = __webpack_require__(852);
 var PrivateKey = __webpack_require__(502);
@@ -9080,7 +11633,7 @@ return PromiseArray;
 
 "use strict";
 
-var es5 = __webpack_require__(883);
+var es5 = __webpack_require__(461);
 var canEvaluate = typeof navigator == "undefined";
 
 var errorObj = {e: {}};
@@ -9546,7 +12099,7 @@ for (var e in errors) {
 
 module.exports = function(NEXT_FILTER) {
 var util = __webpack_require__(248);
-var getKeys = __webpack_require__(883).keys;
+var getKeys = __webpack_require__(461).keys;
 var tryCatch = util.tryCatch;
 var errorObj = util.errorObj;
 
@@ -9728,12 +12281,268 @@ exports.permuteDomain = permuteDomain;
 
 /***/ }),
 /* 259 */,
-/* 260 */,
+/* 260 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+// Note: since nyc uses this module to output coverage, any lines
+// that are in the direct sync flow of nyc's outputCoverage are
+// ignored, since we can never get coverage for them.
+var assert = __webpack_require__(357)
+var signals = __webpack_require__(654)
+
+var EE = __webpack_require__(614)
+/* istanbul ignore if */
+if (typeof EE !== 'function') {
+  EE = EE.EventEmitter
+}
+
+var emitter
+if (process.__signal_exit_emitter__) {
+  emitter = process.__signal_exit_emitter__
+} else {
+  emitter = process.__signal_exit_emitter__ = new EE()
+  emitter.count = 0
+  emitter.emitted = {}
+}
+
+// Because this emitter is a global, we have to check to see if a
+// previous version of this library failed to enable infinite listeners.
+// I know what you're about to say.  But literally everything about
+// signal-exit is a compromise with evil.  Get used to it.
+if (!emitter.infinite) {
+  emitter.setMaxListeners(Infinity)
+  emitter.infinite = true
+}
+
+module.exports = function (cb, opts) {
+  assert.equal(typeof cb, 'function', 'a callback must be provided for exit handler')
+
+  if (loaded === false) {
+    load()
+  }
+
+  var ev = 'exit'
+  if (opts && opts.alwaysLast) {
+    ev = 'afterexit'
+  }
+
+  var remove = function () {
+    emitter.removeListener(ev, cb)
+    if (emitter.listeners('exit').length === 0 &&
+        emitter.listeners('afterexit').length === 0) {
+      unload()
+    }
+  }
+  emitter.on(ev, cb)
+
+  return remove
+}
+
+module.exports.unload = unload
+function unload () {
+  if (!loaded) {
+    return
+  }
+  loaded = false
+
+  signals.forEach(function (sig) {
+    try {
+      process.removeListener(sig, sigListeners[sig])
+    } catch (er) {}
+  })
+  process.emit = originalProcessEmit
+  process.reallyExit = originalProcessReallyExit
+  emitter.count -= 1
+}
+
+function emit (event, code, signal) {
+  if (emitter.emitted[event]) {
+    return
+  }
+  emitter.emitted[event] = true
+  emitter.emit(event, code, signal)
+}
+
+// { <signal>: <listener fn>, ... }
+var sigListeners = {}
+signals.forEach(function (sig) {
+  sigListeners[sig] = function listener () {
+    // If there are no other listeners, an exit is coming!
+    // Simplest way: remove us and then re-send the signal.
+    // We know that this will kill the process, so we can
+    // safely emit now.
+    var listeners = process.listeners(sig)
+    if (listeners.length === emitter.count) {
+      unload()
+      emit('exit', null, sig)
+      /* istanbul ignore next */
+      emit('afterexit', null, sig)
+      /* istanbul ignore next */
+      process.kill(process.pid, sig)
+    }
+  }
+})
+
+module.exports.signals = function () {
+  return signals
+}
+
+module.exports.load = load
+
+var loaded = false
+
+function load () {
+  if (loaded) {
+    return
+  }
+  loaded = true
+
+  // This is the number of onSignalExit's that are in play.
+  // It's important so that we can count the correct number of
+  // listeners on signals, and don't wait for the other one to
+  // handle it instead of us.
+  emitter.count += 1
+
+  signals = signals.filter(function (sig) {
+    try {
+      process.on(sig, sigListeners[sig])
+      return true
+    } catch (er) {
+      return false
+    }
+  })
+
+  process.emit = processEmit
+  process.reallyExit = processReallyExit
+}
+
+var originalProcessReallyExit = process.reallyExit
+function processReallyExit (code) {
+  process.exitCode = code || 0
+  emit('exit', process.exitCode, null)
+  /* istanbul ignore next */
+  emit('afterexit', process.exitCode, null)
+  /* istanbul ignore next */
+  originalProcessReallyExit.call(process, process.exitCode)
+}
+
+var originalProcessEmit = process.emit
+function processEmit (ev, arg) {
+  if (ev === 'exit') {
+    if (arg !== undefined) {
+      process.exitCode = arg
+    }
+    var ret = originalProcessEmit.apply(this, arguments)
+    emit('exit', process.exitCode, null)
+    /* istanbul ignore next */
+    emit('afterexit', process.exitCode, null)
+    return ret
+  } else {
+    return originalProcessEmit.apply(this, arguments)
+  }
+}
+
+
+/***/ }),
 /* 261 */,
-/* 262 */,
+/* 262 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const fs_1 = __webpack_require__(747);
+const os_1 = __webpack_require__(87);
+class Context {
+    /**
+     * Hydrate the context from the environment
+     */
+    constructor() {
+        this.payload = {};
+        if (process.env.GITHUB_EVENT_PATH) {
+            if (fs_1.existsSync(process.env.GITHUB_EVENT_PATH)) {
+                this.payload = JSON.parse(fs_1.readFileSync(process.env.GITHUB_EVENT_PATH, { encoding: 'utf8' }));
+            }
+            else {
+                const path = process.env.GITHUB_EVENT_PATH;
+                process.stdout.write(`GITHUB_EVENT_PATH ${path} does not exist${os_1.EOL}`);
+            }
+        }
+        this.eventName = process.env.GITHUB_EVENT_NAME;
+        this.sha = process.env.GITHUB_SHA;
+        this.ref = process.env.GITHUB_REF;
+        this.workflow = process.env.GITHUB_WORKFLOW;
+        this.action = process.env.GITHUB_ACTION;
+        this.actor = process.env.GITHUB_ACTOR;
+    }
+    get issue() {
+        const payload = this.payload;
+        return Object.assign(Object.assign({}, this.repo), { number: (payload.issue || payload.pull_request || payload).number });
+    }
+    get repo() {
+        if (process.env.GITHUB_REPOSITORY) {
+            const [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
+            return { owner, repo };
+        }
+        if (this.payload.repository) {
+            return {
+                owner: this.payload.repository.owner.login,
+                repo: this.payload.repository.name
+            };
+        }
+        throw new Error("context.repo requires a GITHUB_REPOSITORY environment variable like 'owner/repo'");
+    }
+}
+exports.Context = Context;
+//# sourceMappingURL=context.js.map
+
+/***/ }),
 /* 263 */,
 /* 264 */,
-/* 265 */,
+/* 265 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = getPage
+
+const deprecate = __webpack_require__(370)
+const getPageLinks = __webpack_require__(577)
+const HttpError = __webpack_require__(297)
+
+function getPage (octokit, link, which, headers) {
+  deprecate(`octokit.get${which.charAt(0).toUpperCase() + which.slice(1)}Page() – You can use octokit.paginate or async iterators instead: https://github.com/octokit/rest.js#pagination.`)
+  const url = getPageLinks(link)[which]
+
+  if (!url) {
+    const urlError = new HttpError(`No ${which} page found`, 404)
+    return Promise.reject(urlError)
+  }
+
+  const requestOptions = {
+    url,
+    headers: applyAcceptHeader(link, headers)
+  }
+
+  const promise = octokit.request(requestOptions)
+
+  return promise
+}
+
+function applyAcceptHeader (res, headers) {
+  const previous = res.headers && res.headers['x-github-media-type']
+
+  if (!previous || (headers && headers.accept)) {
+    return headers
+  }
+  headers = headers || {}
+  headers.accept = 'application/vnd.' + previous
+    .replace('; param=', '.')
+    .replace('; format=', '+')
+
+  return headers
+}
+
+
+/***/ }),
 /* 266 */
 /***/ (function(module) {
 
@@ -9876,10 +12685,10 @@ module.exports = {
 	write: write
 };
 
-var assert = __webpack_require__(489);
+var assert = __webpack_require__(757);
 var asn1 = __webpack_require__(62);
 var crypto = __webpack_require__(417);
-var Buffer = __webpack_require__(215).Buffer;
+var Buffer = __webpack_require__(481).Buffer;
 var algs = __webpack_require__(98);
 var utils = __webpack_require__(270);
 var Key = __webpack_require__(852);
@@ -9890,7 +12699,7 @@ var pkcs8 = __webpack_require__(707);
 var sshpriv = __webpack_require__(78);
 var rfc4253 = __webpack_require__(538);
 
-var errors = __webpack_require__(753);
+var errors = __webpack_require__(570);
 
 var OID_PBES2 = '1.2.840.113549.1.5.13';
 var OID_PBKDF2 = '1.2.840.113549.1.5.12';
@@ -10189,8 +12998,8 @@ module.exports = {
 	pbkdf2: pbkdf2
 };
 
-var assert = __webpack_require__(489);
-var Buffer = __webpack_require__(215).Buffer;
+var assert = __webpack_require__(757);
+var Buffer = __webpack_require__(481).Buffer;
 var PrivateKey = __webpack_require__(502);
 var Key = __webpack_require__(852);
 var crypto = __webpack_require__(417);
@@ -10584,7 +13393,7 @@ module.exports = function(Promise, Context,
 var async = Promise._async;
 var Warning = __webpack_require__(607).Warning;
 var util = __webpack_require__(248);
-var es5 = __webpack_require__(883);
+var es5 = __webpack_require__(461);
 var canAttachTrace = util.canAttachTrace;
 var unhandledRejectionHandled;
 var possiblyUnhandledRejection;
@@ -11594,10 +14403,1562 @@ return {
 /* 274 */,
 /* 275 */,
 /* 276 */,
-/* 277 */,
+/* 277 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const base_1 = __webpack_require__(142);
+const issueTag_1 = __webpack_require__(164);
+exports.TagPaths = {
+    issueTags: '/issueTags',
+    issueTag: '/issueTags/{tagId}'
+};
+class TagEndpoint extends base_1.BaseEndpoint {
+    all(paginationOptions = {}) {
+        return this.getResourceWithFields(exports.TagPaths.issueTags, issueTag_1.IssueTagImpl, { qs: paginationOptions });
+    }
+    byId(tagId) {
+        return this.getResourceWithFields(this.format(exports.TagPaths.issueTag, { tagId }), issueTag_1.IssueTagImpl);
+    }
+}
+exports.TagEndpoint = TagEndpoint;
+
+
+/***/ }),
 /* 278 */,
-/* 279 */,
-/* 280 */,
+/* 279 */
+/***/ (function(module) {
+
+var nargs = /\{([0-9a-zA-Z_]+)\}/g
+
+module.exports = template
+
+function template(string) {
+    var args
+
+    if (arguments.length === 2 && typeof arguments[1] === "object") {
+        args = arguments[1]
+    } else {
+        args = new Array(arguments.length - 1)
+        for (var i = 1; i < arguments.length; ++i) {
+            args[i - 1] = arguments[i]
+        }
+    }
+
+    if (!args || !args.hasOwnProperty) {
+        args = {}
+    }
+
+    return string.replace(nargs, function replaceArg(match, i, index) {
+        var result
+
+        if (string[index - 1] === "{" &&
+            string[index + match.length] === "}") {
+            return i
+        } else {
+            result = args.hasOwnProperty(i) ? args[i] : null
+            if (result === null || result === undefined) {
+                return ""
+            }
+
+            return result
+        }
+    })
+}
+
+
+/***/ }),
+/* 280 */
+/***/ (function(module, exports) {
+
+exports = module.exports = SemVer
+
+var debug
+/* istanbul ignore next */
+if (typeof process === 'object' &&
+    process.env &&
+    process.env.NODE_DEBUG &&
+    /\bsemver\b/i.test(process.env.NODE_DEBUG)) {
+  debug = function () {
+    var args = Array.prototype.slice.call(arguments, 0)
+    args.unshift('SEMVER')
+    console.log.apply(console, args)
+  }
+} else {
+  debug = function () {}
+}
+
+// Note: this is the semver.org version of the spec that it implements
+// Not necessarily the package version of this code.
+exports.SEMVER_SPEC_VERSION = '2.0.0'
+
+var MAX_LENGTH = 256
+var MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER ||
+  /* istanbul ignore next */ 9007199254740991
+
+// Max safe segment length for coercion.
+var MAX_SAFE_COMPONENT_LENGTH = 16
+
+// The actual regexps go on exports.re
+var re = exports.re = []
+var src = exports.src = []
+var R = 0
+
+// The following Regular Expressions can be used for tokenizing,
+// validating, and parsing SemVer version strings.
+
+// ## Numeric Identifier
+// A single `0`, or a non-zero digit followed by zero or more digits.
+
+var NUMERICIDENTIFIER = R++
+src[NUMERICIDENTIFIER] = '0|[1-9]\\d*'
+var NUMERICIDENTIFIERLOOSE = R++
+src[NUMERICIDENTIFIERLOOSE] = '[0-9]+'
+
+// ## Non-numeric Identifier
+// Zero or more digits, followed by a letter or hyphen, and then zero or
+// more letters, digits, or hyphens.
+
+var NONNUMERICIDENTIFIER = R++
+src[NONNUMERICIDENTIFIER] = '\\d*[a-zA-Z-][a-zA-Z0-9-]*'
+
+// ## Main Version
+// Three dot-separated numeric identifiers.
+
+var MAINVERSION = R++
+src[MAINVERSION] = '(' + src[NUMERICIDENTIFIER] + ')\\.' +
+                   '(' + src[NUMERICIDENTIFIER] + ')\\.' +
+                   '(' + src[NUMERICIDENTIFIER] + ')'
+
+var MAINVERSIONLOOSE = R++
+src[MAINVERSIONLOOSE] = '(' + src[NUMERICIDENTIFIERLOOSE] + ')\\.' +
+                        '(' + src[NUMERICIDENTIFIERLOOSE] + ')\\.' +
+                        '(' + src[NUMERICIDENTIFIERLOOSE] + ')'
+
+// ## Pre-release Version Identifier
+// A numeric identifier, or a non-numeric identifier.
+
+var PRERELEASEIDENTIFIER = R++
+src[PRERELEASEIDENTIFIER] = '(?:' + src[NUMERICIDENTIFIER] +
+                            '|' + src[NONNUMERICIDENTIFIER] + ')'
+
+var PRERELEASEIDENTIFIERLOOSE = R++
+src[PRERELEASEIDENTIFIERLOOSE] = '(?:' + src[NUMERICIDENTIFIERLOOSE] +
+                                 '|' + src[NONNUMERICIDENTIFIER] + ')'
+
+// ## Pre-release Version
+// Hyphen, followed by one or more dot-separated pre-release version
+// identifiers.
+
+var PRERELEASE = R++
+src[PRERELEASE] = '(?:-(' + src[PRERELEASEIDENTIFIER] +
+                  '(?:\\.' + src[PRERELEASEIDENTIFIER] + ')*))'
+
+var PRERELEASELOOSE = R++
+src[PRERELEASELOOSE] = '(?:-?(' + src[PRERELEASEIDENTIFIERLOOSE] +
+                       '(?:\\.' + src[PRERELEASEIDENTIFIERLOOSE] + ')*))'
+
+// ## Build Metadata Identifier
+// Any combination of digits, letters, or hyphens.
+
+var BUILDIDENTIFIER = R++
+src[BUILDIDENTIFIER] = '[0-9A-Za-z-]+'
+
+// ## Build Metadata
+// Plus sign, followed by one or more period-separated build metadata
+// identifiers.
+
+var BUILD = R++
+src[BUILD] = '(?:\\+(' + src[BUILDIDENTIFIER] +
+             '(?:\\.' + src[BUILDIDENTIFIER] + ')*))'
+
+// ## Full Version String
+// A main version, followed optionally by a pre-release version and
+// build metadata.
+
+// Note that the only major, minor, patch, and pre-release sections of
+// the version string are capturing groups.  The build metadata is not a
+// capturing group, because it should not ever be used in version
+// comparison.
+
+var FULL = R++
+var FULLPLAIN = 'v?' + src[MAINVERSION] +
+                src[PRERELEASE] + '?' +
+                src[BUILD] + '?'
+
+src[FULL] = '^' + FULLPLAIN + '$'
+
+// like full, but allows v1.2.3 and =1.2.3, which people do sometimes.
+// also, 1.0.0alpha1 (prerelease without the hyphen) which is pretty
+// common in the npm registry.
+var LOOSEPLAIN = '[v=\\s]*' + src[MAINVERSIONLOOSE] +
+                 src[PRERELEASELOOSE] + '?' +
+                 src[BUILD] + '?'
+
+var LOOSE = R++
+src[LOOSE] = '^' + LOOSEPLAIN + '$'
+
+var GTLT = R++
+src[GTLT] = '((?:<|>)?=?)'
+
+// Something like "2.*" or "1.2.x".
+// Note that "x.x" is a valid xRange identifer, meaning "any version"
+// Only the first item is strictly required.
+var XRANGEIDENTIFIERLOOSE = R++
+src[XRANGEIDENTIFIERLOOSE] = src[NUMERICIDENTIFIERLOOSE] + '|x|X|\\*'
+var XRANGEIDENTIFIER = R++
+src[XRANGEIDENTIFIER] = src[NUMERICIDENTIFIER] + '|x|X|\\*'
+
+var XRANGEPLAIN = R++
+src[XRANGEPLAIN] = '[v=\\s]*(' + src[XRANGEIDENTIFIER] + ')' +
+                   '(?:\\.(' + src[XRANGEIDENTIFIER] + ')' +
+                   '(?:\\.(' + src[XRANGEIDENTIFIER] + ')' +
+                   '(?:' + src[PRERELEASE] + ')?' +
+                   src[BUILD] + '?' +
+                   ')?)?'
+
+var XRANGEPLAINLOOSE = R++
+src[XRANGEPLAINLOOSE] = '[v=\\s]*(' + src[XRANGEIDENTIFIERLOOSE] + ')' +
+                        '(?:\\.(' + src[XRANGEIDENTIFIERLOOSE] + ')' +
+                        '(?:\\.(' + src[XRANGEIDENTIFIERLOOSE] + ')' +
+                        '(?:' + src[PRERELEASELOOSE] + ')?' +
+                        src[BUILD] + '?' +
+                        ')?)?'
+
+var XRANGE = R++
+src[XRANGE] = '^' + src[GTLT] + '\\s*' + src[XRANGEPLAIN] + '$'
+var XRANGELOOSE = R++
+src[XRANGELOOSE] = '^' + src[GTLT] + '\\s*' + src[XRANGEPLAINLOOSE] + '$'
+
+// Coercion.
+// Extract anything that could conceivably be a part of a valid semver
+var COERCE = R++
+src[COERCE] = '(?:^|[^\\d])' +
+              '(\\d{1,' + MAX_SAFE_COMPONENT_LENGTH + '})' +
+              '(?:\\.(\\d{1,' + MAX_SAFE_COMPONENT_LENGTH + '}))?' +
+              '(?:\\.(\\d{1,' + MAX_SAFE_COMPONENT_LENGTH + '}))?' +
+              '(?:$|[^\\d])'
+
+// Tilde ranges.
+// Meaning is "reasonably at or greater than"
+var LONETILDE = R++
+src[LONETILDE] = '(?:~>?)'
+
+var TILDETRIM = R++
+src[TILDETRIM] = '(\\s*)' + src[LONETILDE] + '\\s+'
+re[TILDETRIM] = new RegExp(src[TILDETRIM], 'g')
+var tildeTrimReplace = '$1~'
+
+var TILDE = R++
+src[TILDE] = '^' + src[LONETILDE] + src[XRANGEPLAIN] + '$'
+var TILDELOOSE = R++
+src[TILDELOOSE] = '^' + src[LONETILDE] + src[XRANGEPLAINLOOSE] + '$'
+
+// Caret ranges.
+// Meaning is "at least and backwards compatible with"
+var LONECARET = R++
+src[LONECARET] = '(?:\\^)'
+
+var CARETTRIM = R++
+src[CARETTRIM] = '(\\s*)' + src[LONECARET] + '\\s+'
+re[CARETTRIM] = new RegExp(src[CARETTRIM], 'g')
+var caretTrimReplace = '$1^'
+
+var CARET = R++
+src[CARET] = '^' + src[LONECARET] + src[XRANGEPLAIN] + '$'
+var CARETLOOSE = R++
+src[CARETLOOSE] = '^' + src[LONECARET] + src[XRANGEPLAINLOOSE] + '$'
+
+// A simple gt/lt/eq thing, or just "" to indicate "any version"
+var COMPARATORLOOSE = R++
+src[COMPARATORLOOSE] = '^' + src[GTLT] + '\\s*(' + LOOSEPLAIN + ')$|^$'
+var COMPARATOR = R++
+src[COMPARATOR] = '^' + src[GTLT] + '\\s*(' + FULLPLAIN + ')$|^$'
+
+// An expression to strip any whitespace between the gtlt and the thing
+// it modifies, so that `> 1.2.3` ==> `>1.2.3`
+var COMPARATORTRIM = R++
+src[COMPARATORTRIM] = '(\\s*)' + src[GTLT] +
+                      '\\s*(' + LOOSEPLAIN + '|' + src[XRANGEPLAIN] + ')'
+
+// this one has to use the /g flag
+re[COMPARATORTRIM] = new RegExp(src[COMPARATORTRIM], 'g')
+var comparatorTrimReplace = '$1$2$3'
+
+// Something like `1.2.3 - 1.2.4`
+// Note that these all use the loose form, because they'll be
+// checked against either the strict or loose comparator form
+// later.
+var HYPHENRANGE = R++
+src[HYPHENRANGE] = '^\\s*(' + src[XRANGEPLAIN] + ')' +
+                   '\\s+-\\s+' +
+                   '(' + src[XRANGEPLAIN] + ')' +
+                   '\\s*$'
+
+var HYPHENRANGELOOSE = R++
+src[HYPHENRANGELOOSE] = '^\\s*(' + src[XRANGEPLAINLOOSE] + ')' +
+                        '\\s+-\\s+' +
+                        '(' + src[XRANGEPLAINLOOSE] + ')' +
+                        '\\s*$'
+
+// Star ranges basically just allow anything at all.
+var STAR = R++
+src[STAR] = '(<|>)?=?\\s*\\*'
+
+// Compile to actual regexp objects.
+// All are flag-free, unless they were created above with a flag.
+for (var i = 0; i < R; i++) {
+  debug(i, src[i])
+  if (!re[i]) {
+    re[i] = new RegExp(src[i])
+  }
+}
+
+exports.parse = parse
+function parse (version, options) {
+  if (!options || typeof options !== 'object') {
+    options = {
+      loose: !!options,
+      includePrerelease: false
+    }
+  }
+
+  if (version instanceof SemVer) {
+    return version
+  }
+
+  if (typeof version !== 'string') {
+    return null
+  }
+
+  if (version.length > MAX_LENGTH) {
+    return null
+  }
+
+  var r = options.loose ? re[LOOSE] : re[FULL]
+  if (!r.test(version)) {
+    return null
+  }
+
+  try {
+    return new SemVer(version, options)
+  } catch (er) {
+    return null
+  }
+}
+
+exports.valid = valid
+function valid (version, options) {
+  var v = parse(version, options)
+  return v ? v.version : null
+}
+
+exports.clean = clean
+function clean (version, options) {
+  var s = parse(version.trim().replace(/^[=v]+/, ''), options)
+  return s ? s.version : null
+}
+
+exports.SemVer = SemVer
+
+function SemVer (version, options) {
+  if (!options || typeof options !== 'object') {
+    options = {
+      loose: !!options,
+      includePrerelease: false
+    }
+  }
+  if (version instanceof SemVer) {
+    if (version.loose === options.loose) {
+      return version
+    } else {
+      version = version.version
+    }
+  } else if (typeof version !== 'string') {
+    throw new TypeError('Invalid Version: ' + version)
+  }
+
+  if (version.length > MAX_LENGTH) {
+    throw new TypeError('version is longer than ' + MAX_LENGTH + ' characters')
+  }
+
+  if (!(this instanceof SemVer)) {
+    return new SemVer(version, options)
+  }
+
+  debug('SemVer', version, options)
+  this.options = options
+  this.loose = !!options.loose
+
+  var m = version.trim().match(options.loose ? re[LOOSE] : re[FULL])
+
+  if (!m) {
+    throw new TypeError('Invalid Version: ' + version)
+  }
+
+  this.raw = version
+
+  // these are actually numbers
+  this.major = +m[1]
+  this.minor = +m[2]
+  this.patch = +m[3]
+
+  if (this.major > MAX_SAFE_INTEGER || this.major < 0) {
+    throw new TypeError('Invalid major version')
+  }
+
+  if (this.minor > MAX_SAFE_INTEGER || this.minor < 0) {
+    throw new TypeError('Invalid minor version')
+  }
+
+  if (this.patch > MAX_SAFE_INTEGER || this.patch < 0) {
+    throw new TypeError('Invalid patch version')
+  }
+
+  // numberify any prerelease numeric ids
+  if (!m[4]) {
+    this.prerelease = []
+  } else {
+    this.prerelease = m[4].split('.').map(function (id) {
+      if (/^[0-9]+$/.test(id)) {
+        var num = +id
+        if (num >= 0 && num < MAX_SAFE_INTEGER) {
+          return num
+        }
+      }
+      return id
+    })
+  }
+
+  this.build = m[5] ? m[5].split('.') : []
+  this.format()
+}
+
+SemVer.prototype.format = function () {
+  this.version = this.major + '.' + this.minor + '.' + this.patch
+  if (this.prerelease.length) {
+    this.version += '-' + this.prerelease.join('.')
+  }
+  return this.version
+}
+
+SemVer.prototype.toString = function () {
+  return this.version
+}
+
+SemVer.prototype.compare = function (other) {
+  debug('SemVer.compare', this.version, this.options, other)
+  if (!(other instanceof SemVer)) {
+    other = new SemVer(other, this.options)
+  }
+
+  return this.compareMain(other) || this.comparePre(other)
+}
+
+SemVer.prototype.compareMain = function (other) {
+  if (!(other instanceof SemVer)) {
+    other = new SemVer(other, this.options)
+  }
+
+  return compareIdentifiers(this.major, other.major) ||
+         compareIdentifiers(this.minor, other.minor) ||
+         compareIdentifiers(this.patch, other.patch)
+}
+
+SemVer.prototype.comparePre = function (other) {
+  if (!(other instanceof SemVer)) {
+    other = new SemVer(other, this.options)
+  }
+
+  // NOT having a prerelease is > having one
+  if (this.prerelease.length && !other.prerelease.length) {
+    return -1
+  } else if (!this.prerelease.length && other.prerelease.length) {
+    return 1
+  } else if (!this.prerelease.length && !other.prerelease.length) {
+    return 0
+  }
+
+  var i = 0
+  do {
+    var a = this.prerelease[i]
+    var b = other.prerelease[i]
+    debug('prerelease compare', i, a, b)
+    if (a === undefined && b === undefined) {
+      return 0
+    } else if (b === undefined) {
+      return 1
+    } else if (a === undefined) {
+      return -1
+    } else if (a === b) {
+      continue
+    } else {
+      return compareIdentifiers(a, b)
+    }
+  } while (++i)
+}
+
+// preminor will bump the version up to the next minor release, and immediately
+// down to pre-release. premajor and prepatch work the same way.
+SemVer.prototype.inc = function (release, identifier) {
+  switch (release) {
+    case 'premajor':
+      this.prerelease.length = 0
+      this.patch = 0
+      this.minor = 0
+      this.major++
+      this.inc('pre', identifier)
+      break
+    case 'preminor':
+      this.prerelease.length = 0
+      this.patch = 0
+      this.minor++
+      this.inc('pre', identifier)
+      break
+    case 'prepatch':
+      // If this is already a prerelease, it will bump to the next version
+      // drop any prereleases that might already exist, since they are not
+      // relevant at this point.
+      this.prerelease.length = 0
+      this.inc('patch', identifier)
+      this.inc('pre', identifier)
+      break
+    // If the input is a non-prerelease version, this acts the same as
+    // prepatch.
+    case 'prerelease':
+      if (this.prerelease.length === 0) {
+        this.inc('patch', identifier)
+      }
+      this.inc('pre', identifier)
+      break
+
+    case 'major':
+      // If this is a pre-major version, bump up to the same major version.
+      // Otherwise increment major.
+      // 1.0.0-5 bumps to 1.0.0
+      // 1.1.0 bumps to 2.0.0
+      if (this.minor !== 0 ||
+          this.patch !== 0 ||
+          this.prerelease.length === 0) {
+        this.major++
+      }
+      this.minor = 0
+      this.patch = 0
+      this.prerelease = []
+      break
+    case 'minor':
+      // If this is a pre-minor version, bump up to the same minor version.
+      // Otherwise increment minor.
+      // 1.2.0-5 bumps to 1.2.0
+      // 1.2.1 bumps to 1.3.0
+      if (this.patch !== 0 || this.prerelease.length === 0) {
+        this.minor++
+      }
+      this.patch = 0
+      this.prerelease = []
+      break
+    case 'patch':
+      // If this is not a pre-release version, it will increment the patch.
+      // If it is a pre-release it will bump up to the same patch version.
+      // 1.2.0-5 patches to 1.2.0
+      // 1.2.0 patches to 1.2.1
+      if (this.prerelease.length === 0) {
+        this.patch++
+      }
+      this.prerelease = []
+      break
+    // This probably shouldn't be used publicly.
+    // 1.0.0 "pre" would become 1.0.0-0 which is the wrong direction.
+    case 'pre':
+      if (this.prerelease.length === 0) {
+        this.prerelease = [0]
+      } else {
+        var i = this.prerelease.length
+        while (--i >= 0) {
+          if (typeof this.prerelease[i] === 'number') {
+            this.prerelease[i]++
+            i = -2
+          }
+        }
+        if (i === -1) {
+          // didn't increment anything
+          this.prerelease.push(0)
+        }
+      }
+      if (identifier) {
+        // 1.2.0-beta.1 bumps to 1.2.0-beta.2,
+        // 1.2.0-beta.fooblz or 1.2.0-beta bumps to 1.2.0-beta.0
+        if (this.prerelease[0] === identifier) {
+          if (isNaN(this.prerelease[1])) {
+            this.prerelease = [identifier, 0]
+          }
+        } else {
+          this.prerelease = [identifier, 0]
+        }
+      }
+      break
+
+    default:
+      throw new Error('invalid increment argument: ' + release)
+  }
+  this.format()
+  this.raw = this.version
+  return this
+}
+
+exports.inc = inc
+function inc (version, release, loose, identifier) {
+  if (typeof (loose) === 'string') {
+    identifier = loose
+    loose = undefined
+  }
+
+  try {
+    return new SemVer(version, loose).inc(release, identifier).version
+  } catch (er) {
+    return null
+  }
+}
+
+exports.diff = diff
+function diff (version1, version2) {
+  if (eq(version1, version2)) {
+    return null
+  } else {
+    var v1 = parse(version1)
+    var v2 = parse(version2)
+    var prefix = ''
+    if (v1.prerelease.length || v2.prerelease.length) {
+      prefix = 'pre'
+      var defaultResult = 'prerelease'
+    }
+    for (var key in v1) {
+      if (key === 'major' || key === 'minor' || key === 'patch') {
+        if (v1[key] !== v2[key]) {
+          return prefix + key
+        }
+      }
+    }
+    return defaultResult // may be undefined
+  }
+}
+
+exports.compareIdentifiers = compareIdentifiers
+
+var numeric = /^[0-9]+$/
+function compareIdentifiers (a, b) {
+  var anum = numeric.test(a)
+  var bnum = numeric.test(b)
+
+  if (anum && bnum) {
+    a = +a
+    b = +b
+  }
+
+  return a === b ? 0
+    : (anum && !bnum) ? -1
+    : (bnum && !anum) ? 1
+    : a < b ? -1
+    : 1
+}
+
+exports.rcompareIdentifiers = rcompareIdentifiers
+function rcompareIdentifiers (a, b) {
+  return compareIdentifiers(b, a)
+}
+
+exports.major = major
+function major (a, loose) {
+  return new SemVer(a, loose).major
+}
+
+exports.minor = minor
+function minor (a, loose) {
+  return new SemVer(a, loose).minor
+}
+
+exports.patch = patch
+function patch (a, loose) {
+  return new SemVer(a, loose).patch
+}
+
+exports.compare = compare
+function compare (a, b, loose) {
+  return new SemVer(a, loose).compare(new SemVer(b, loose))
+}
+
+exports.compareLoose = compareLoose
+function compareLoose (a, b) {
+  return compare(a, b, true)
+}
+
+exports.rcompare = rcompare
+function rcompare (a, b, loose) {
+  return compare(b, a, loose)
+}
+
+exports.sort = sort
+function sort (list, loose) {
+  return list.sort(function (a, b) {
+    return exports.compare(a, b, loose)
+  })
+}
+
+exports.rsort = rsort
+function rsort (list, loose) {
+  return list.sort(function (a, b) {
+    return exports.rcompare(a, b, loose)
+  })
+}
+
+exports.gt = gt
+function gt (a, b, loose) {
+  return compare(a, b, loose) > 0
+}
+
+exports.lt = lt
+function lt (a, b, loose) {
+  return compare(a, b, loose) < 0
+}
+
+exports.eq = eq
+function eq (a, b, loose) {
+  return compare(a, b, loose) === 0
+}
+
+exports.neq = neq
+function neq (a, b, loose) {
+  return compare(a, b, loose) !== 0
+}
+
+exports.gte = gte
+function gte (a, b, loose) {
+  return compare(a, b, loose) >= 0
+}
+
+exports.lte = lte
+function lte (a, b, loose) {
+  return compare(a, b, loose) <= 0
+}
+
+exports.cmp = cmp
+function cmp (a, op, b, loose) {
+  switch (op) {
+    case '===':
+      if (typeof a === 'object')
+        a = a.version
+      if (typeof b === 'object')
+        b = b.version
+      return a === b
+
+    case '!==':
+      if (typeof a === 'object')
+        a = a.version
+      if (typeof b === 'object')
+        b = b.version
+      return a !== b
+
+    case '':
+    case '=':
+    case '==':
+      return eq(a, b, loose)
+
+    case '!=':
+      return neq(a, b, loose)
+
+    case '>':
+      return gt(a, b, loose)
+
+    case '>=':
+      return gte(a, b, loose)
+
+    case '<':
+      return lt(a, b, loose)
+
+    case '<=':
+      return lte(a, b, loose)
+
+    default:
+      throw new TypeError('Invalid operator: ' + op)
+  }
+}
+
+exports.Comparator = Comparator
+function Comparator (comp, options) {
+  if (!options || typeof options !== 'object') {
+    options = {
+      loose: !!options,
+      includePrerelease: false
+    }
+  }
+
+  if (comp instanceof Comparator) {
+    if (comp.loose === !!options.loose) {
+      return comp
+    } else {
+      comp = comp.value
+    }
+  }
+
+  if (!(this instanceof Comparator)) {
+    return new Comparator(comp, options)
+  }
+
+  debug('comparator', comp, options)
+  this.options = options
+  this.loose = !!options.loose
+  this.parse(comp)
+
+  if (this.semver === ANY) {
+    this.value = ''
+  } else {
+    this.value = this.operator + this.semver.version
+  }
+
+  debug('comp', this)
+}
+
+var ANY = {}
+Comparator.prototype.parse = function (comp) {
+  var r = this.options.loose ? re[COMPARATORLOOSE] : re[COMPARATOR]
+  var m = comp.match(r)
+
+  if (!m) {
+    throw new TypeError('Invalid comparator: ' + comp)
+  }
+
+  this.operator = m[1]
+  if (this.operator === '=') {
+    this.operator = ''
+  }
+
+  // if it literally is just '>' or '' then allow anything.
+  if (!m[2]) {
+    this.semver = ANY
+  } else {
+    this.semver = new SemVer(m[2], this.options.loose)
+  }
+}
+
+Comparator.prototype.toString = function () {
+  return this.value
+}
+
+Comparator.prototype.test = function (version) {
+  debug('Comparator.test', version, this.options.loose)
+
+  if (this.semver === ANY) {
+    return true
+  }
+
+  if (typeof version === 'string') {
+    version = new SemVer(version, this.options)
+  }
+
+  return cmp(version, this.operator, this.semver, this.options)
+}
+
+Comparator.prototype.intersects = function (comp, options) {
+  if (!(comp instanceof Comparator)) {
+    throw new TypeError('a Comparator is required')
+  }
+
+  if (!options || typeof options !== 'object') {
+    options = {
+      loose: !!options,
+      includePrerelease: false
+    }
+  }
+
+  var rangeTmp
+
+  if (this.operator === '') {
+    rangeTmp = new Range(comp.value, options)
+    return satisfies(this.value, rangeTmp, options)
+  } else if (comp.operator === '') {
+    rangeTmp = new Range(this.value, options)
+    return satisfies(comp.semver, rangeTmp, options)
+  }
+
+  var sameDirectionIncreasing =
+    (this.operator === '>=' || this.operator === '>') &&
+    (comp.operator === '>=' || comp.operator === '>')
+  var sameDirectionDecreasing =
+    (this.operator === '<=' || this.operator === '<') &&
+    (comp.operator === '<=' || comp.operator === '<')
+  var sameSemVer = this.semver.version === comp.semver.version
+  var differentDirectionsInclusive =
+    (this.operator === '>=' || this.operator === '<=') &&
+    (comp.operator === '>=' || comp.operator === '<=')
+  var oppositeDirectionsLessThan =
+    cmp(this.semver, '<', comp.semver, options) &&
+    ((this.operator === '>=' || this.operator === '>') &&
+    (comp.operator === '<=' || comp.operator === '<'))
+  var oppositeDirectionsGreaterThan =
+    cmp(this.semver, '>', comp.semver, options) &&
+    ((this.operator === '<=' || this.operator === '<') &&
+    (comp.operator === '>=' || comp.operator === '>'))
+
+  return sameDirectionIncreasing || sameDirectionDecreasing ||
+    (sameSemVer && differentDirectionsInclusive) ||
+    oppositeDirectionsLessThan || oppositeDirectionsGreaterThan
+}
+
+exports.Range = Range
+function Range (range, options) {
+  if (!options || typeof options !== 'object') {
+    options = {
+      loose: !!options,
+      includePrerelease: false
+    }
+  }
+
+  if (range instanceof Range) {
+    if (range.loose === !!options.loose &&
+        range.includePrerelease === !!options.includePrerelease) {
+      return range
+    } else {
+      return new Range(range.raw, options)
+    }
+  }
+
+  if (range instanceof Comparator) {
+    return new Range(range.value, options)
+  }
+
+  if (!(this instanceof Range)) {
+    return new Range(range, options)
+  }
+
+  this.options = options
+  this.loose = !!options.loose
+  this.includePrerelease = !!options.includePrerelease
+
+  // First, split based on boolean or ||
+  this.raw = range
+  this.set = range.split(/\s*\|\|\s*/).map(function (range) {
+    return this.parseRange(range.trim())
+  }, this).filter(function (c) {
+    // throw out any that are not relevant for whatever reason
+    return c.length
+  })
+
+  if (!this.set.length) {
+    throw new TypeError('Invalid SemVer Range: ' + range)
+  }
+
+  this.format()
+}
+
+Range.prototype.format = function () {
+  this.range = this.set.map(function (comps) {
+    return comps.join(' ').trim()
+  }).join('||').trim()
+  return this.range
+}
+
+Range.prototype.toString = function () {
+  return this.range
+}
+
+Range.prototype.parseRange = function (range) {
+  var loose = this.options.loose
+  range = range.trim()
+  // `1.2.3 - 1.2.4` => `>=1.2.3 <=1.2.4`
+  var hr = loose ? re[HYPHENRANGELOOSE] : re[HYPHENRANGE]
+  range = range.replace(hr, hyphenReplace)
+  debug('hyphen replace', range)
+  // `> 1.2.3 < 1.2.5` => `>1.2.3 <1.2.5`
+  range = range.replace(re[COMPARATORTRIM], comparatorTrimReplace)
+  debug('comparator trim', range, re[COMPARATORTRIM])
+
+  // `~ 1.2.3` => `~1.2.3`
+  range = range.replace(re[TILDETRIM], tildeTrimReplace)
+
+  // `^ 1.2.3` => `^1.2.3`
+  range = range.replace(re[CARETTRIM], caretTrimReplace)
+
+  // normalize spaces
+  range = range.split(/\s+/).join(' ')
+
+  // At this point, the range is completely trimmed and
+  // ready to be split into comparators.
+
+  var compRe = loose ? re[COMPARATORLOOSE] : re[COMPARATOR]
+  var set = range.split(' ').map(function (comp) {
+    return parseComparator(comp, this.options)
+  }, this).join(' ').split(/\s+/)
+  if (this.options.loose) {
+    // in loose mode, throw out any that are not valid comparators
+    set = set.filter(function (comp) {
+      return !!comp.match(compRe)
+    })
+  }
+  set = set.map(function (comp) {
+    return new Comparator(comp, this.options)
+  }, this)
+
+  return set
+}
+
+Range.prototype.intersects = function (range, options) {
+  if (!(range instanceof Range)) {
+    throw new TypeError('a Range is required')
+  }
+
+  return this.set.some(function (thisComparators) {
+    return thisComparators.every(function (thisComparator) {
+      return range.set.some(function (rangeComparators) {
+        return rangeComparators.every(function (rangeComparator) {
+          return thisComparator.intersects(rangeComparator, options)
+        })
+      })
+    })
+  })
+}
+
+// Mostly just for testing and legacy API reasons
+exports.toComparators = toComparators
+function toComparators (range, options) {
+  return new Range(range, options).set.map(function (comp) {
+    return comp.map(function (c) {
+      return c.value
+    }).join(' ').trim().split(' ')
+  })
+}
+
+// comprised of xranges, tildes, stars, and gtlt's at this point.
+// already replaced the hyphen ranges
+// turn into a set of JUST comparators.
+function parseComparator (comp, options) {
+  debug('comp', comp, options)
+  comp = replaceCarets(comp, options)
+  debug('caret', comp)
+  comp = replaceTildes(comp, options)
+  debug('tildes', comp)
+  comp = replaceXRanges(comp, options)
+  debug('xrange', comp)
+  comp = replaceStars(comp, options)
+  debug('stars', comp)
+  return comp
+}
+
+function isX (id) {
+  return !id || id.toLowerCase() === 'x' || id === '*'
+}
+
+// ~, ~> --> * (any, kinda silly)
+// ~2, ~2.x, ~2.x.x, ~>2, ~>2.x ~>2.x.x --> >=2.0.0 <3.0.0
+// ~2.0, ~2.0.x, ~>2.0, ~>2.0.x --> >=2.0.0 <2.1.0
+// ~1.2, ~1.2.x, ~>1.2, ~>1.2.x --> >=1.2.0 <1.3.0
+// ~1.2.3, ~>1.2.3 --> >=1.2.3 <1.3.0
+// ~1.2.0, ~>1.2.0 --> >=1.2.0 <1.3.0
+function replaceTildes (comp, options) {
+  return comp.trim().split(/\s+/).map(function (comp) {
+    return replaceTilde(comp, options)
+  }).join(' ')
+}
+
+function replaceTilde (comp, options) {
+  var r = options.loose ? re[TILDELOOSE] : re[TILDE]
+  return comp.replace(r, function (_, M, m, p, pr) {
+    debug('tilde', comp, _, M, m, p, pr)
+    var ret
+
+    if (isX(M)) {
+      ret = ''
+    } else if (isX(m)) {
+      ret = '>=' + M + '.0.0 <' + (+M + 1) + '.0.0'
+    } else if (isX(p)) {
+      // ~1.2 == >=1.2.0 <1.3.0
+      ret = '>=' + M + '.' + m + '.0 <' + M + '.' + (+m + 1) + '.0'
+    } else if (pr) {
+      debug('replaceTilde pr', pr)
+      ret = '>=' + M + '.' + m + '.' + p + '-' + pr +
+            ' <' + M + '.' + (+m + 1) + '.0'
+    } else {
+      // ~1.2.3 == >=1.2.3 <1.3.0
+      ret = '>=' + M + '.' + m + '.' + p +
+            ' <' + M + '.' + (+m + 1) + '.0'
+    }
+
+    debug('tilde return', ret)
+    return ret
+  })
+}
+
+// ^ --> * (any, kinda silly)
+// ^2, ^2.x, ^2.x.x --> >=2.0.0 <3.0.0
+// ^2.0, ^2.0.x --> >=2.0.0 <3.0.0
+// ^1.2, ^1.2.x --> >=1.2.0 <2.0.0
+// ^1.2.3 --> >=1.2.3 <2.0.0
+// ^1.2.0 --> >=1.2.0 <2.0.0
+function replaceCarets (comp, options) {
+  return comp.trim().split(/\s+/).map(function (comp) {
+    return replaceCaret(comp, options)
+  }).join(' ')
+}
+
+function replaceCaret (comp, options) {
+  debug('caret', comp, options)
+  var r = options.loose ? re[CARETLOOSE] : re[CARET]
+  return comp.replace(r, function (_, M, m, p, pr) {
+    debug('caret', comp, _, M, m, p, pr)
+    var ret
+
+    if (isX(M)) {
+      ret = ''
+    } else if (isX(m)) {
+      ret = '>=' + M + '.0.0 <' + (+M + 1) + '.0.0'
+    } else if (isX(p)) {
+      if (M === '0') {
+        ret = '>=' + M + '.' + m + '.0 <' + M + '.' + (+m + 1) + '.0'
+      } else {
+        ret = '>=' + M + '.' + m + '.0 <' + (+M + 1) + '.0.0'
+      }
+    } else if (pr) {
+      debug('replaceCaret pr', pr)
+      if (M === '0') {
+        if (m === '0') {
+          ret = '>=' + M + '.' + m + '.' + p + '-' + pr +
+                ' <' + M + '.' + m + '.' + (+p + 1)
+        } else {
+          ret = '>=' + M + '.' + m + '.' + p + '-' + pr +
+                ' <' + M + '.' + (+m + 1) + '.0'
+        }
+      } else {
+        ret = '>=' + M + '.' + m + '.' + p + '-' + pr +
+              ' <' + (+M + 1) + '.0.0'
+      }
+    } else {
+      debug('no pr')
+      if (M === '0') {
+        if (m === '0') {
+          ret = '>=' + M + '.' + m + '.' + p +
+                ' <' + M + '.' + m + '.' + (+p + 1)
+        } else {
+          ret = '>=' + M + '.' + m + '.' + p +
+                ' <' + M + '.' + (+m + 1) + '.0'
+        }
+      } else {
+        ret = '>=' + M + '.' + m + '.' + p +
+              ' <' + (+M + 1) + '.0.0'
+      }
+    }
+
+    debug('caret return', ret)
+    return ret
+  })
+}
+
+function replaceXRanges (comp, options) {
+  debug('replaceXRanges', comp, options)
+  return comp.split(/\s+/).map(function (comp) {
+    return replaceXRange(comp, options)
+  }).join(' ')
+}
+
+function replaceXRange (comp, options) {
+  comp = comp.trim()
+  var r = options.loose ? re[XRANGELOOSE] : re[XRANGE]
+  return comp.replace(r, function (ret, gtlt, M, m, p, pr) {
+    debug('xRange', comp, ret, gtlt, M, m, p, pr)
+    var xM = isX(M)
+    var xm = xM || isX(m)
+    var xp = xm || isX(p)
+    var anyX = xp
+
+    if (gtlt === '=' && anyX) {
+      gtlt = ''
+    }
+
+    if (xM) {
+      if (gtlt === '>' || gtlt === '<') {
+        // nothing is allowed
+        ret = '<0.0.0'
+      } else {
+        // nothing is forbidden
+        ret = '*'
+      }
+    } else if (gtlt && anyX) {
+      // we know patch is an x, because we have any x at all.
+      // replace X with 0
+      if (xm) {
+        m = 0
+      }
+      p = 0
+
+      if (gtlt === '>') {
+        // >1 => >=2.0.0
+        // >1.2 => >=1.3.0
+        // >1.2.3 => >= 1.2.4
+        gtlt = '>='
+        if (xm) {
+          M = +M + 1
+          m = 0
+          p = 0
+        } else {
+          m = +m + 1
+          p = 0
+        }
+      } else if (gtlt === '<=') {
+        // <=0.7.x is actually <0.8.0, since any 0.7.x should
+        // pass.  Similarly, <=7.x is actually <8.0.0, etc.
+        gtlt = '<'
+        if (xm) {
+          M = +M + 1
+        } else {
+          m = +m + 1
+        }
+      }
+
+      ret = gtlt + M + '.' + m + '.' + p
+    } else if (xm) {
+      ret = '>=' + M + '.0.0 <' + (+M + 1) + '.0.0'
+    } else if (xp) {
+      ret = '>=' + M + '.' + m + '.0 <' + M + '.' + (+m + 1) + '.0'
+    }
+
+    debug('xRange return', ret)
+
+    return ret
+  })
+}
+
+// Because * is AND-ed with everything else in the comparator,
+// and '' means "any version", just remove the *s entirely.
+function replaceStars (comp, options) {
+  debug('replaceStars', comp, options)
+  // Looseness is ignored here.  star is always as loose as it gets!
+  return comp.trim().replace(re[STAR], '')
+}
+
+// This function is passed to string.replace(re[HYPHENRANGE])
+// M, m, patch, prerelease, build
+// 1.2 - 3.4.5 => >=1.2.0 <=3.4.5
+// 1.2.3 - 3.4 => >=1.2.0 <3.5.0 Any 3.4.x will do
+// 1.2 - 3.4 => >=1.2.0 <3.5.0
+function hyphenReplace ($0,
+  from, fM, fm, fp, fpr, fb,
+  to, tM, tm, tp, tpr, tb) {
+  if (isX(fM)) {
+    from = ''
+  } else if (isX(fm)) {
+    from = '>=' + fM + '.0.0'
+  } else if (isX(fp)) {
+    from = '>=' + fM + '.' + fm + '.0'
+  } else {
+    from = '>=' + from
+  }
+
+  if (isX(tM)) {
+    to = ''
+  } else if (isX(tm)) {
+    to = '<' + (+tM + 1) + '.0.0'
+  } else if (isX(tp)) {
+    to = '<' + tM + '.' + (+tm + 1) + '.0'
+  } else if (tpr) {
+    to = '<=' + tM + '.' + tm + '.' + tp + '-' + tpr
+  } else {
+    to = '<=' + to
+  }
+
+  return (from + ' ' + to).trim()
+}
+
+// if ANY of the sets match ALL of its comparators, then pass
+Range.prototype.test = function (version) {
+  if (!version) {
+    return false
+  }
+
+  if (typeof version === 'string') {
+    version = new SemVer(version, this.options)
+  }
+
+  for (var i = 0; i < this.set.length; i++) {
+    if (testSet(this.set[i], version, this.options)) {
+      return true
+    }
+  }
+  return false
+}
+
+function testSet (set, version, options) {
+  for (var i = 0; i < set.length; i++) {
+    if (!set[i].test(version)) {
+      return false
+    }
+  }
+
+  if (version.prerelease.length && !options.includePrerelease) {
+    // Find the set of versions that are allowed to have prereleases
+    // For example, ^1.2.3-pr.1 desugars to >=1.2.3-pr.1 <2.0.0
+    // That should allow `1.2.3-pr.2` to pass.
+    // However, `1.2.4-alpha.notready` should NOT be allowed,
+    // even though it's within the range set by the comparators.
+    for (i = 0; i < set.length; i++) {
+      debug(set[i].semver)
+      if (set[i].semver === ANY) {
+        continue
+      }
+
+      if (set[i].semver.prerelease.length > 0) {
+        var allowed = set[i].semver
+        if (allowed.major === version.major &&
+            allowed.minor === version.minor &&
+            allowed.patch === version.patch) {
+          return true
+        }
+      }
+    }
+
+    // Version has a -pre, but it's not one of the ones we like.
+    return false
+  }
+
+  return true
+}
+
+exports.satisfies = satisfies
+function satisfies (version, range, options) {
+  try {
+    range = new Range(range, options)
+  } catch (er) {
+    return false
+  }
+  return range.test(version)
+}
+
+exports.maxSatisfying = maxSatisfying
+function maxSatisfying (versions, range, options) {
+  var max = null
+  var maxSV = null
+  try {
+    var rangeObj = new Range(range, options)
+  } catch (er) {
+    return null
+  }
+  versions.forEach(function (v) {
+    if (rangeObj.test(v)) {
+      // satisfies(v, range, options)
+      if (!max || maxSV.compare(v) === -1) {
+        // compare(max, v, true)
+        max = v
+        maxSV = new SemVer(max, options)
+      }
+    }
+  })
+  return max
+}
+
+exports.minSatisfying = minSatisfying
+function minSatisfying (versions, range, options) {
+  var min = null
+  var minSV = null
+  try {
+    var rangeObj = new Range(range, options)
+  } catch (er) {
+    return null
+  }
+  versions.forEach(function (v) {
+    if (rangeObj.test(v)) {
+      // satisfies(v, range, options)
+      if (!min || minSV.compare(v) === 1) {
+        // compare(min, v, true)
+        min = v
+        minSV = new SemVer(min, options)
+      }
+    }
+  })
+  return min
+}
+
+exports.minVersion = minVersion
+function minVersion (range, loose) {
+  range = new Range(range, loose)
+
+  var minver = new SemVer('0.0.0')
+  if (range.test(minver)) {
+    return minver
+  }
+
+  minver = new SemVer('0.0.0-0')
+  if (range.test(minver)) {
+    return minver
+  }
+
+  minver = null
+  for (var i = 0; i < range.set.length; ++i) {
+    var comparators = range.set[i]
+
+    comparators.forEach(function (comparator) {
+      // Clone to avoid manipulating the comparator's semver object.
+      var compver = new SemVer(comparator.semver.version)
+      switch (comparator.operator) {
+        case '>':
+          if (compver.prerelease.length === 0) {
+            compver.patch++
+          } else {
+            compver.prerelease.push(0)
+          }
+          compver.raw = compver.format()
+          /* fallthrough */
+        case '':
+        case '>=':
+          if (!minver || gt(minver, compver)) {
+            minver = compver
+          }
+          break
+        case '<':
+        case '<=':
+          /* Ignore maximum versions */
+          break
+        /* istanbul ignore next */
+        default:
+          throw new Error('Unexpected operation: ' + comparator.operator)
+      }
+    })
+  }
+
+  if (minver && range.test(minver)) {
+    return minver
+  }
+
+  return null
+}
+
+exports.validRange = validRange
+function validRange (range, options) {
+  try {
+    // Return '*' instead of '' so that truthiness works.
+    // This will throw if it's invalid anyway
+    return new Range(range, options).range || '*'
+  } catch (er) {
+    return null
+  }
+}
+
+// Determine if version is less than all the versions possible in the range
+exports.ltr = ltr
+function ltr (version, range, options) {
+  return outside(version, range, '<', options)
+}
+
+// Determine if version is greater than all the versions possible in the range.
+exports.gtr = gtr
+function gtr (version, range, options) {
+  return outside(version, range, '>', options)
+}
+
+exports.outside = outside
+function outside (version, range, hilo, options) {
+  version = new SemVer(version, options)
+  range = new Range(range, options)
+
+  var gtfn, ltefn, ltfn, comp, ecomp
+  switch (hilo) {
+    case '>':
+      gtfn = gt
+      ltefn = lte
+      ltfn = lt
+      comp = '>'
+      ecomp = '>='
+      break
+    case '<':
+      gtfn = lt
+      ltefn = gte
+      ltfn = gt
+      comp = '<'
+      ecomp = '<='
+      break
+    default:
+      throw new TypeError('Must provide a hilo val of "<" or ">"')
+  }
+
+  // If it satisifes the range it is not outside
+  if (satisfies(version, range, options)) {
+    return false
+  }
+
+  // From now on, variable terms are as if we're in "gtr" mode.
+  // but note that everything is flipped for the "ltr" function.
+
+  for (var i = 0; i < range.set.length; ++i) {
+    var comparators = range.set[i]
+
+    var high = null
+    var low = null
+
+    comparators.forEach(function (comparator) {
+      if (comparator.semver === ANY) {
+        comparator = new Comparator('>=0.0.0')
+      }
+      high = high || comparator
+      low = low || comparator
+      if (gtfn(comparator.semver, high.semver, options)) {
+        high = comparator
+      } else if (ltfn(comparator.semver, low.semver, options)) {
+        low = comparator
+      }
+    })
+
+    // If the edge version comparator has a operator then our version
+    // isn't outside it
+    if (high.operator === comp || high.operator === ecomp) {
+      return false
+    }
+
+    // If the lowest version comparator has an operator and our version
+    // is less than it then it isn't higher than the range
+    if ((!low.operator || low.operator === comp) &&
+        ltefn(version, low.semver)) {
+      return false
+    } else if (low.operator === ecomp && ltfn(version, low.semver)) {
+      return false
+    }
+  }
+  return true
+}
+
+exports.prerelease = prerelease
+function prerelease (version, options) {
+  var parsed = parse(version, options)
+  return (parsed && parsed.prerelease.length) ? parsed.prerelease : null
+}
+
+exports.intersects = intersects
+function intersects (r1, r2, options) {
+  r1 = new Range(r1, options)
+  r2 = new Range(r2, options)
+  return r1.intersects(r2)
+}
+
+exports.coerce = coerce
+function coerce (version) {
+  if (version instanceof SemVer) {
+    return version
+  }
+
+  if (typeof version !== 'string') {
+    return null
+  }
+
+  var match = version.match(re[COERCE])
+
+  if (match == null) {
+    return null
+  }
+
+  return parse(match[1] +
+    '.' + (match[2] || '0') +
+    '.' + (match[3] || '0'))
+}
+
+
+/***/ }),
 /* 281 */
 /***/ (function(module) {
 
@@ -11682,12 +16043,12 @@ module.exports = function generate_enum(it, $keyword, $ruleType) {
 var compileSchema = __webpack_require__(805)
   , resolve = __webpack_require__(867)
   , Cache = __webpack_require__(921)
-  , SchemaObject = __webpack_require__(955)
+  , SchemaObject = __webpack_require__(474)
   , stableStringify = __webpack_require__(741)
-  , formats = __webpack_require__(881)
+  , formats = __webpack_require__(492)
   , rules = __webpack_require__(496)
-  , $dataMetaSchema = __webpack_require__(9)
-  , util = __webpack_require__(855);
+  , $dataMetaSchema = __webpack_require__(683)
+  , util = __webpack_require__(949);
 
 module.exports = Ajv;
 
@@ -12459,9 +16820,9 @@ module.exports = {
 	generateED25519: generateED25519
 };
 
-var assert = __webpack_require__(489);
+var assert = __webpack_require__(757);
 var crypto = __webpack_require__(417);
-var Buffer = __webpack_require__(215).Buffer;
+var Buffer = __webpack_require__(481).Buffer;
 var algs = __webpack_require__(98);
 var utils = __webpack_require__(270);
 var nacl = __webpack_require__(196);
@@ -12859,7 +17220,7 @@ function generateECDSA(curve) {
 
 
 var core = __webpack_require__(609),
-    isArray = __webpack_require__(143),
+    isArray = __webpack_require__(806),
     isFunction = __webpack_require__(10),
     isObjectLike = __webpack_require__(337);
 
@@ -12934,17 +17295,346 @@ module.exports = function (options) {
 
 /***/ }),
 /* 293 */
-/***/ (function(module) {
+/***/ (function(module, __unusedexports, __webpack_require__) {
 
-module.exports = require("buffer");
+module.exports = authenticationRequestError;
+
+const { RequestError } = __webpack_require__(463);
+
+function authenticationRequestError(state, error, options) {
+  if (!error.headers) throw error;
+
+  const otpRequired = /required/.test(error.headers["x-github-otp"] || "");
+  // handle "2FA required" error only
+  if (error.status !== 401 || !otpRequired) {
+    throw error;
+  }
+
+  if (
+    error.status === 401 &&
+    otpRequired &&
+    error.request &&
+    error.request.headers["x-github-otp"]
+  ) {
+    if (state.otp) {
+      delete state.otp; // no longer valid, request again
+    } else {
+      throw new RequestError(
+        "Invalid one-time password for two-factor authentication",
+        401,
+        {
+          headers: error.headers,
+          request: options
+        }
+      );
+    }
+  }
+
+  if (typeof state.auth.on2fa !== "function") {
+    throw new RequestError(
+      "2FA required, but options.on2fa is not a function. See https://github.com/octokit/rest.js#authentication",
+      401,
+      {
+        headers: error.headers,
+        request: options
+      }
+    );
+  }
+
+  return Promise.resolve()
+    .then(() => {
+      return state.auth.on2fa();
+    })
+    .then(oneTimePassword => {
+      const newOptions = Object.assign(options, {
+        headers: Object.assign(options.headers, {
+          "x-github-otp": oneTimePassword
+        })
+      });
+      return state.octokit.request(newOptions).then(response => {
+        // If OTP still valid, then persist it for following requests
+        state.otp = oneTimePassword;
+        return response;
+      });
+    });
+}
+
 
 /***/ }),
-/* 294 */,
+/* 294 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = parseOptions;
+
+const { Deprecation } = __webpack_require__(692);
+const { getUserAgent } = __webpack_require__(796);
+const once = __webpack_require__(969);
+
+const pkg = __webpack_require__(215);
+
+const deprecateOptionsTimeout = once((log, deprecation) =>
+  log.warn(deprecation)
+);
+const deprecateOptionsAgent = once((log, deprecation) => log.warn(deprecation));
+const deprecateOptionsHeaders = once((log, deprecation) =>
+  log.warn(deprecation)
+);
+
+function parseOptions(options, log, hook) {
+  if (options.headers) {
+    options.headers = Object.keys(options.headers).reduce((newObj, key) => {
+      newObj[key.toLowerCase()] = options.headers[key];
+      return newObj;
+    }, {});
+  }
+
+  const clientDefaults = {
+    headers: options.headers || {},
+    request: options.request || {},
+    mediaType: {
+      previews: [],
+      format: ""
+    }
+  };
+
+  if (options.baseUrl) {
+    clientDefaults.baseUrl = options.baseUrl;
+  }
+
+  if (options.userAgent) {
+    clientDefaults.headers["user-agent"] = options.userAgent;
+  }
+
+  if (options.previews) {
+    clientDefaults.mediaType.previews = options.previews;
+  }
+
+  if (options.timeZone) {
+    clientDefaults.headers["time-zone"] = options.timeZone;
+  }
+
+  if (options.timeout) {
+    deprecateOptionsTimeout(
+      log,
+      new Deprecation(
+        "[@octokit/rest] new Octokit({timeout}) is deprecated. Use {request: {timeout}} instead. See https://github.com/octokit/request.js#request"
+      )
+    );
+    clientDefaults.request.timeout = options.timeout;
+  }
+
+  if (options.agent) {
+    deprecateOptionsAgent(
+      log,
+      new Deprecation(
+        "[@octokit/rest] new Octokit({agent}) is deprecated. Use {request: {agent}} instead. See https://github.com/octokit/request.js#request"
+      )
+    );
+    clientDefaults.request.agent = options.agent;
+  }
+
+  if (options.headers) {
+    deprecateOptionsHeaders(
+      log,
+      new Deprecation(
+        "[@octokit/rest] new Octokit({headers}) is deprecated. Use {userAgent, previews} instead. See https://github.com/octokit/request.js#request"
+      )
+    );
+  }
+
+  const userAgentOption = clientDefaults.headers["user-agent"];
+  const defaultUserAgent = `octokit.js/${pkg.version} ${getUserAgent()}`;
+
+  clientDefaults.headers["user-agent"] = [userAgentOption, defaultUserAgent]
+    .filter(Boolean)
+    .join(" ");
+
+  clientDefaults.request.hook = hook.bind(null, "request");
+
+  return clientDefaults;
+}
+
+
+/***/ }),
 /* 295 */,
 /* 296 */,
-/* 297 */,
+/* 297 */
+/***/ (function(module) {
+
+module.exports = class HttpError extends Error {
+  constructor (message, code, headers) {
+    super(message)
+
+    // Maintains proper stack trace (only available on V8)
+    /* istanbul ignore next */
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, this.constructor)
+    }
+
+    this.name = 'HttpError'
+    this.code = code
+    this.headers = headers
+  }
+}
+
+
+/***/ }),
 /* 298 */,
-/* 299 */,
+/* 299 */
+/***/ (function(__unusedmodule, exports) {
+
+"use strict";
+
+
+Object.defineProperty(exports, '__esModule', { value: true });
+
+const VERSION = "1.1.1";
+
+/**
+ * Some “list” response that can be paginated have a different response structure
+ *
+ * They have a `total_count` key in the response (search also has `incomplete_results`,
+ * /installation/repositories also has `repository_selection`), as well as a key with
+ * the list of the items which name varies from endpoint to endpoint:
+ *
+ * - https://developer.github.com/v3/search/#example (key `items`)
+ * - https://developer.github.com/v3/checks/runs/#response-3 (key: `check_runs`)
+ * - https://developer.github.com/v3/checks/suites/#response-1 (key: `check_suites`)
+ * - https://developer.github.com/v3/apps/installations/#list-repositories (key: `repositories`)
+ * - https://developer.github.com/v3/apps/installations/#list-installations-for-a-user (key `installations`)
+ *
+ * Octokit normalizes these responses so that paginated results are always returned following
+ * the same structure. One challenge is that if the list response has only one page, no Link
+ * header is provided, so this header alone is not sufficient to check wether a response is
+ * paginated or not. For the exceptions with the namespace, a fallback check for the route
+ * paths has to be added in order to normalize the response. We cannot check for the total_count
+ * property because it also exists in the response of Get the combined status for a specific ref.
+ */
+const REGEX_IS_SEARCH_PATH = /^\/search\//;
+const REGEX_IS_CHECKS_PATH = /^\/repos\/[^/]+\/[^/]+\/commits\/[^/]+\/(check-runs|check-suites)/;
+const REGEX_IS_INSTALLATION_REPOSITORIES_PATH = /^\/installation\/repositories/;
+const REGEX_IS_USER_INSTALLATIONS_PATH = /^\/user\/installations/;
+function normalizePaginatedListResponse(octokit, url, response) {
+  const path = url.replace(octokit.request.endpoint.DEFAULTS.baseUrl, "");
+
+  if (!REGEX_IS_SEARCH_PATH.test(path) && !REGEX_IS_CHECKS_PATH.test(path) && !REGEX_IS_INSTALLATION_REPOSITORIES_PATH.test(path) && !REGEX_IS_USER_INSTALLATIONS_PATH.test(path)) {
+    return;
+  } // keep the additional properties intact as there is currently no other way
+  // to retrieve the same information.
+
+
+  const incompleteResults = response.data.incomplete_results;
+  const repositorySelection = response.data.repository_selection;
+  const totalCount = response.data.total_count;
+  delete response.data.incomplete_results;
+  delete response.data.repository_selection;
+  delete response.data.total_count;
+  const namespaceKey = Object.keys(response.data)[0];
+  const data = response.data[namespaceKey];
+  response.data = data;
+
+  if (typeof incompleteResults !== "undefined") {
+    response.data.incomplete_results = incompleteResults;
+  }
+
+  if (typeof repositorySelection !== "undefined") {
+    response.data.repository_selection = repositorySelection;
+  }
+
+  response.data.total_count = totalCount;
+  Object.defineProperty(response.data, namespaceKey, {
+    get() {
+      octokit.log.warn(`[@octokit/paginate-rest] "response.data.${namespaceKey}" is deprecated for "GET ${path}". Get the results directly from "response.data"`);
+      return Array.from(data);
+    }
+
+  });
+}
+
+function iterator(octokit, route, parameters) {
+  const options = octokit.request.endpoint(route, parameters);
+  const method = options.method;
+  const headers = options.headers;
+  let url = options.url;
+  return {
+    [Symbol.asyncIterator]: () => ({
+      next() {
+        if (!url) {
+          return Promise.resolve({
+            done: true
+          });
+        }
+
+        return octokit.request({
+          method,
+          url,
+          headers
+        }).then(response => {
+          normalizePaginatedListResponse(octokit, url, response); // `response.headers.link` format:
+          // '<https://api.github.com/users/aseemk/followers?page=2>; rel="next", <https://api.github.com/users/aseemk/followers?page=2>; rel="last"'
+          // sets `url` to undefined if "next" URL is not present or `link` header is not set
+
+          url = ((response.headers.link || "").match(/<([^>]+)>;\s*rel="next"/) || [])[1];
+          return {
+            value: response
+          };
+        });
+      }
+
+    })
+  };
+}
+
+function paginate(octokit, route, parameters, mapFn) {
+  if (typeof parameters === "function") {
+    mapFn = parameters;
+    parameters = undefined;
+  }
+
+  return gather(octokit, [], iterator(octokit, route, parameters)[Symbol.asyncIterator](), mapFn);
+}
+
+function gather(octokit, results, iterator, mapFn) {
+  return iterator.next().then(result => {
+    if (result.done) {
+      return results;
+    }
+
+    let earlyExit = false;
+
+    function done() {
+      earlyExit = true;
+    }
+
+    results = results.concat(mapFn ? mapFn(result.value, done) : result.value.data);
+
+    if (earlyExit) {
+      return results;
+    }
+
+    return gather(octokit, results, iterator, mapFn);
+  });
+}
+
+/**
+ * @param octokit Octokit instance
+ * @param options Options passed to Octokit constructor
+ */
+
+function paginateRest(octokit) {
+  return {
+    paginate: Object.assign(paginate.bind(null, octokit), {
+      iterator: iterator.bind(null, octokit)
+    })
+  };
+}
+paginateRest.VERSION = VERSION;
+
+exports.paginateRest = paginateRest;
+//# sourceMappingURL=index.js.map
+
+
+/***/ }),
 /* 300 */,
 /* 301 */,
 /* 302 */,
@@ -13271,7 +17961,7 @@ module.exports = function(
     Promise, PromiseArray, tryConvertToPromise, apiRejection) {
 var util = __webpack_require__(248);
 var isObject = util.isObject;
-var es5 = __webpack_require__(883);
+var es5 = __webpack_require__(461);
 var Es6Map;
 if (typeof Map === "function") Es6Map = Map;
 
@@ -13389,156 +18079,29 @@ Promise.props = function (promises) {
 /***/ }),
 /* 322 */,
 /* 323 */
-/***/ (function(module, __unusedexports, __webpack_require__) {
+/***/ (function(module) {
 
 "use strict";
 
-module.exports =
-function(Promise, PromiseArray, apiRejection) {
-var util = __webpack_require__(248);
-var RangeError = __webpack_require__(607).RangeError;
-var AggregateError = __webpack_require__(607).AggregateError;
-var isArray = util.isArray;
-var CANCELLATION = {};
 
-
-function SomePromiseArray(values) {
-    this.constructor$(values);
-    this._howMany = 0;
-    this._unwrap = false;
-    this._initialized = false;
-}
-util.inherits(SomePromiseArray, PromiseArray);
-
-SomePromiseArray.prototype._init = function () {
-    if (!this._initialized) {
-        return;
-    }
-    if (this._howMany === 0) {
-        this._resolve([]);
-        return;
-    }
-    this._init$(undefined, -5);
-    var isArrayResolved = isArray(this._values);
-    if (!this._isResolved() &&
-        isArrayResolved &&
-        this._howMany > this._canPossiblyFulfill()) {
-        this._reject(this._getRangeError(this.length()));
-    }
+var isStream = module.exports = function (stream) {
+	return stream !== null && typeof stream === 'object' && typeof stream.pipe === 'function';
 };
 
-SomePromiseArray.prototype.init = function () {
-    this._initialized = true;
-    this._init();
+isStream.writable = function (stream) {
+	return isStream(stream) && stream.writable !== false && typeof stream._write === 'function' && typeof stream._writableState === 'object';
 };
 
-SomePromiseArray.prototype.setUnwrap = function () {
-    this._unwrap = true;
+isStream.readable = function (stream) {
+	return isStream(stream) && stream.readable !== false && typeof stream._read === 'function' && typeof stream._readableState === 'object';
 };
 
-SomePromiseArray.prototype.howMany = function () {
-    return this._howMany;
+isStream.duplex = function (stream) {
+	return isStream.writable(stream) && isStream.readable(stream);
 };
 
-SomePromiseArray.prototype.setHowMany = function (count) {
-    this._howMany = count;
-};
-
-SomePromiseArray.prototype._promiseFulfilled = function (value) {
-    this._addFulfilled(value);
-    if (this._fulfilled() === this.howMany()) {
-        this._values.length = this.howMany();
-        if (this.howMany() === 1 && this._unwrap) {
-            this._resolve(this._values[0]);
-        } else {
-            this._resolve(this._values);
-        }
-        return true;
-    }
-    return false;
-
-};
-SomePromiseArray.prototype._promiseRejected = function (reason) {
-    this._addRejected(reason);
-    return this._checkOutcome();
-};
-
-SomePromiseArray.prototype._promiseCancelled = function () {
-    if (this._values instanceof Promise || this._values == null) {
-        return this._cancel();
-    }
-    this._addRejected(CANCELLATION);
-    return this._checkOutcome();
-};
-
-SomePromiseArray.prototype._checkOutcome = function() {
-    if (this.howMany() > this._canPossiblyFulfill()) {
-        var e = new AggregateError();
-        for (var i = this.length(); i < this._values.length; ++i) {
-            if (this._values[i] !== CANCELLATION) {
-                e.push(this._values[i]);
-            }
-        }
-        if (e.length > 0) {
-            this._reject(e);
-        } else {
-            this._cancel();
-        }
-        return true;
-    }
-    return false;
-};
-
-SomePromiseArray.prototype._fulfilled = function () {
-    return this._totalResolved;
-};
-
-SomePromiseArray.prototype._rejected = function () {
-    return this._values.length - this.length();
-};
-
-SomePromiseArray.prototype._addRejected = function (reason) {
-    this._values.push(reason);
-};
-
-SomePromiseArray.prototype._addFulfilled = function (value) {
-    this._values[this._totalResolved++] = value;
-};
-
-SomePromiseArray.prototype._canPossiblyFulfill = function () {
-    return this.length() - this._rejected();
-};
-
-SomePromiseArray.prototype._getRangeError = function (count) {
-    var message = "Input array must contain at least " +
-            this._howMany + " items but contains only " + count + " items";
-    return new RangeError(message);
-};
-
-SomePromiseArray.prototype._resolveEmptyArray = function () {
-    this._reject(this._getRangeError(0));
-};
-
-function some(promises, howMany) {
-    if ((howMany | 0) !== howMany || howMany < 0) {
-        return apiRejection("expecting a positive integer\u000a\u000a    See http://goo.gl/MqrFmX\u000a");
-    }
-    var ret = new SomePromiseArray(promises);
-    var promise = ret.promise();
-    ret.setHowMany(howMany);
-    ret.init();
-    return promise;
-}
-
-Promise.some = function (promises, howMany) {
-    return some(promises, howMany);
-};
-
-Promise.prototype.some = function (howMany) {
-    return some(this, howMany);
-};
-
-Promise._SomePromiseArray = SomePromiseArray;
+isStream.transform = function (stream) {
+	return isStream.duplex(stream) && typeof stream._transform === 'function' && typeof stream._transformState === 'object';
 };
 
 
@@ -13571,7 +18134,21 @@ module.exports =
 
 /***/ }),
 /* 335 */,
-/* 336 */,
+/* 336 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = hasLastPage
+
+const deprecate = __webpack_require__(370)
+const getPageLinks = __webpack_require__(577)
+
+function hasLastPage (link) {
+  deprecate(`octokit.hasLastPage() – You can use octokit.paginate or async iterators instead: https://github.com/octokit/rest.js#pagination.`)
+  return getPageLinks(link).last
+}
+
+
+/***/ }),
 /* 337 */
 /***/ (function(module) {
 
@@ -13879,9 +18456,9 @@ module.exports = function generate__limit(it, $keyword, $ruleType) {
 
 // Copyright 2012 Joyent, Inc.  All rights reserved.
 
-var assert = __webpack_require__(489);
+var assert = __webpack_require__(757);
 var util = __webpack_require__(669);
-var utils = __webpack_require__(909);
+var utils = __webpack_require__(161);
 
 
 
@@ -14537,742 +19114,159 @@ module.exports = function generate_properties(it, $keyword, $ruleType) {
 /* 346 */,
 /* 347 */,
 /* 348 */
-/***/ (function(__unusedmodule, exports, __webpack_require__) {
-
-/*
- * lib/jsprim.js: utilities for primitive JavaScript types
- */
-
-var mod_assert = __webpack_require__(489);
-var mod_util = __webpack_require__(669);
-
-var mod_extsprintf = __webpack_require__(697);
-var mod_verror = __webpack_require__(956);
-var mod_jsonschema = __webpack_require__(703);
-
-/*
- * Public interface
- */
-exports.deepCopy = deepCopy;
-exports.deepEqual = deepEqual;
-exports.isEmpty = isEmpty;
-exports.hasKey = hasKey;
-exports.forEachKey = forEachKey;
-exports.pluck = pluck;
-exports.flattenObject = flattenObject;
-exports.flattenIter = flattenIter;
-exports.validateJsonObject = validateJsonObjectJS;
-exports.validateJsonObjectJS = validateJsonObjectJS;
-exports.randElt = randElt;
-exports.extraProperties = extraProperties;
-exports.mergeObjects = mergeObjects;
-
-exports.startsWith = startsWith;
-exports.endsWith = endsWith;
-
-exports.parseInteger = parseInteger;
-
-exports.iso8601 = iso8601;
-exports.rfc1123 = rfc1123;
-exports.parseDateTime = parseDateTime;
-
-exports.hrtimediff = hrtimeDiff;
-exports.hrtimeDiff = hrtimeDiff;
-exports.hrtimeAccum = hrtimeAccum;
-exports.hrtimeAdd = hrtimeAdd;
-exports.hrtimeNanosec = hrtimeNanosec;
-exports.hrtimeMicrosec = hrtimeMicrosec;
-exports.hrtimeMillisec = hrtimeMillisec;
-
-
-/*
- * Deep copy an acyclic *basic* Javascript object.  This only handles basic
- * scalars (strings, numbers, booleans) and arbitrarily deep arrays and objects
- * containing these.  This does *not* handle instances of other classes.
- */
-function deepCopy(obj)
-{
-	var ret, key;
-	var marker = '__deepCopy';
-
-	if (obj && obj[marker])
-		throw (new Error('attempted deep copy of cyclic object'));
-
-	if (obj && obj.constructor == Object) {
-		ret = {};
-		obj[marker] = true;
-
-		for (key in obj) {
-			if (key == marker)
-				continue;
-
-			ret[key] = deepCopy(obj[key]);
-		}
-
-		delete (obj[marker]);
-		return (ret);
-	}
-
-	if (obj && obj.constructor == Array) {
-		ret = [];
-		obj[marker] = true;
-
-		for (key = 0; key < obj.length; key++)
-			ret.push(deepCopy(obj[key]));
-
-		delete (obj[marker]);
-		return (ret);
-	}
-
-	/*
-	 * It must be a primitive type -- just return it.
-	 */
-	return (obj);
-}
-
-function deepEqual(obj1, obj2)
-{
-	if (typeof (obj1) != typeof (obj2))
-		return (false);
-
-	if (obj1 === null || obj2 === null || typeof (obj1) != 'object')
-		return (obj1 === obj2);
-
-	if (obj1.constructor != obj2.constructor)
-		return (false);
-
-	var k;
-	for (k in obj1) {
-		if (!obj2.hasOwnProperty(k))
-			return (false);
-
-		if (!deepEqual(obj1[k], obj2[k]))
-			return (false);
-	}
-
-	for (k in obj2) {
-		if (!obj1.hasOwnProperty(k))
-			return (false);
-	}
-
-	return (true);
-}
-
-function isEmpty(obj)
-{
-	var key;
-	for (key in obj)
-		return (false);
-	return (true);
-}
-
-function hasKey(obj, key)
-{
-	mod_assert.equal(typeof (key), 'string');
-	return (Object.prototype.hasOwnProperty.call(obj, key));
-}
-
-function forEachKey(obj, callback)
-{
-	for (var key in obj) {
-		if (hasKey(obj, key)) {
-			callback(key, obj[key]);
-		}
-	}
-}
-
-function pluck(obj, key)
-{
-	mod_assert.equal(typeof (key), 'string');
-	return (pluckv(obj, key));
-}
-
-function pluckv(obj, key)
-{
-	if (obj === null || typeof (obj) !== 'object')
-		return (undefined);
-
-	if (obj.hasOwnProperty(key))
-		return (obj[key]);
-
-	var i = key.indexOf('.');
-	if (i == -1)
-		return (undefined);
-
-	var key1 = key.substr(0, i);
-	if (!obj.hasOwnProperty(key1))
-		return (undefined);
-
-	return (pluckv(obj[key1], key.substr(i + 1)));
-}
-
-/*
- * Invoke callback(row) for each entry in the array that would be returned by
- * flattenObject(data, depth).  This is just like flattenObject(data,
- * depth).forEach(callback), except that the intermediate array is never
- * created.
- */
-function flattenIter(data, depth, callback)
-{
-	doFlattenIter(data, depth, [], callback);
-}
-
-function doFlattenIter(data, depth, accum, callback)
-{
-	var each;
-	var key;
-
-	if (depth === 0) {
-		each = accum.slice(0);
-		each.push(data);
-		callback(each);
-		return;
-	}
-
-	mod_assert.ok(data !== null);
-	mod_assert.equal(typeof (data), 'object');
-	mod_assert.equal(typeof (depth), 'number');
-	mod_assert.ok(depth >= 0);
-
-	for (key in data) {
-		each = accum.slice(0);
-		each.push(key);
-		doFlattenIter(data[key], depth - 1, each, callback);
-	}
-}
-
-function flattenObject(data, depth)
-{
-	if (depth === 0)
-		return ([ data ]);
-
-	mod_assert.ok(data !== null);
-	mod_assert.equal(typeof (data), 'object');
-	mod_assert.equal(typeof (depth), 'number');
-	mod_assert.ok(depth >= 0);
-
-	var rv = [];
-	var key;
-
-	for (key in data) {
-		flattenObject(data[key], depth - 1).forEach(function (p) {
-			rv.push([ key ].concat(p));
-		});
-	}
-
-	return (rv);
-}
-
-function startsWith(str, prefix)
-{
-	return (str.substr(0, prefix.length) == prefix);
-}
-
-function endsWith(str, suffix)
-{
-	return (str.substr(
-	    str.length - suffix.length, suffix.length) == suffix);
-}
-
-function iso8601(d)
-{
-	if (typeof (d) == 'number')
-		d = new Date(d);
-	mod_assert.ok(d.constructor === Date);
-	return (mod_extsprintf.sprintf('%4d-%02d-%02dT%02d:%02d:%02d.%03dZ',
-	    d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(),
-	    d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(),
-	    d.getUTCMilliseconds()));
-}
-
-var RFC1123_MONTHS = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-var RFC1123_DAYS = [
-    'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-function rfc1123(date) {
-	return (mod_extsprintf.sprintf('%s, %02d %s %04d %02d:%02d:%02d GMT',
-	    RFC1123_DAYS[date.getUTCDay()], date.getUTCDate(),
-	    RFC1123_MONTHS[date.getUTCMonth()], date.getUTCFullYear(),
-	    date.getUTCHours(), date.getUTCMinutes(),
-	    date.getUTCSeconds()));
-}
-
-/*
- * Parses a date expressed as a string, as either a number of milliseconds since
- * the epoch or any string format that Date accepts, giving preference to the
- * former where these two sets overlap (e.g., small numbers).
- */
-function parseDateTime(str)
-{
-	/*
-	 * This is irritatingly implicit, but significantly more concise than
-	 * alternatives.  The "+str" will convert a string containing only a
-	 * number directly to a Number, or NaN for other strings.  Thus, if the
-	 * conversion succeeds, we use it (this is the milliseconds-since-epoch
-	 * case).  Otherwise, we pass the string directly to the Date
-	 * constructor to parse.
-	 */
-	var numeric = +str;
-	if (!isNaN(numeric)) {
-		return (new Date(numeric));
-	} else {
-		return (new Date(str));
-	}
-}
-
-
-/*
- * Number.*_SAFE_INTEGER isn't present before node v0.12, so we hardcode
- * the ES6 definitions here, while allowing for them to someday be higher.
- */
-var MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER || 9007199254740991;
-var MIN_SAFE_INTEGER = Number.MIN_SAFE_INTEGER || -9007199254740991;
-
-
-/*
- * Default options for parseInteger().
- */
-var PI_DEFAULTS = {
-	base: 10,
-	allowSign: true,
-	allowPrefix: false,
-	allowTrailing: false,
-	allowImprecise: false,
-	trimWhitespace: false,
-	leadingZeroIsOctal: false
-};
-
-var CP_0 = 0x30;
-var CP_9 = 0x39;
-
-var CP_A = 0x41;
-var CP_B = 0x42;
-var CP_O = 0x4f;
-var CP_T = 0x54;
-var CP_X = 0x58;
-var CP_Z = 0x5a;
-
-var CP_a = 0x61;
-var CP_b = 0x62;
-var CP_o = 0x6f;
-var CP_t = 0x74;
-var CP_x = 0x78;
-var CP_z = 0x7a;
-
-var PI_CONV_DEC = 0x30;
-var PI_CONV_UC = 0x37;
-var PI_CONV_LC = 0x57;
-
-
-/*
- * A stricter version of parseInt() that provides options for changing what
- * is an acceptable string (for example, disallowing trailing characters).
- */
-function parseInteger(str, uopts)
-{
-	mod_assert.string(str, 'str');
-	mod_assert.optionalObject(uopts, 'options');
-
-	var baseOverride = false;
-	var options = PI_DEFAULTS;
-
-	if (uopts) {
-		baseOverride = hasKey(uopts, 'base');
-		options = mergeObjects(options, uopts);
-		mod_assert.number(options.base, 'options.base');
-		mod_assert.ok(options.base >= 2, 'options.base >= 2');
-		mod_assert.ok(options.base <= 36, 'options.base <= 36');
-		mod_assert.bool(options.allowSign, 'options.allowSign');
-		mod_assert.bool(options.allowPrefix, 'options.allowPrefix');
-		mod_assert.bool(options.allowTrailing,
-		    'options.allowTrailing');
-		mod_assert.bool(options.allowImprecise,
-		    'options.allowImprecise');
-		mod_assert.bool(options.trimWhitespace,
-		    'options.trimWhitespace');
-		mod_assert.bool(options.leadingZeroIsOctal,
-		    'options.leadingZeroIsOctal');
-
-		if (options.leadingZeroIsOctal) {
-			mod_assert.ok(!baseOverride,
-			    '"base" and "leadingZeroIsOctal" are ' +
-			    'mutually exclusive');
-		}
-	}
-
-	var c;
-	var pbase = -1;
-	var base = options.base;
-	var start;
-	var mult = 1;
-	var value = 0;
-	var idx = 0;
-	var len = str.length;
-
-	/* Trim any whitespace on the left side. */
-	if (options.trimWhitespace) {
-		while (idx < len && isSpace(str.charCodeAt(idx))) {
-			++idx;
-		}
-	}
-
-	/* Check the number for a leading sign. */
-	if (options.allowSign) {
-		if (str[idx] === '-') {
-			idx += 1;
-			mult = -1;
-		} else if (str[idx] === '+') {
-			idx += 1;
-		}
-	}
-
-	/* Parse the base-indicating prefix if there is one. */
-	if (str[idx] === '0') {
-		if (options.allowPrefix) {
-			pbase = prefixToBase(str.charCodeAt(idx + 1));
-			if (pbase !== -1 && (!baseOverride || pbase === base)) {
-				base = pbase;
-				idx += 2;
-			}
-		}
-
-		if (pbase === -1 && options.leadingZeroIsOctal) {
-			base = 8;
-		}
-	}
-
-	/* Parse the actual digits. */
-	for (start = idx; idx < len; ++idx) {
-		c = translateDigit(str.charCodeAt(idx));
-		if (c !== -1 && c < base) {
-			value *= base;
-			value += c;
-		} else {
-			break;
-		}
-	}
-
-	/* If we didn't parse any digits, we have an invalid number. */
-	if (start === idx) {
-		return (new Error('invalid number: ' + JSON.stringify(str)));
-	}
-
-	/* Trim any whitespace on the right side. */
-	if (options.trimWhitespace) {
-		while (idx < len && isSpace(str.charCodeAt(idx))) {
-			++idx;
-		}
-	}
-
-	/* Check for trailing characters. */
-	if (idx < len && !options.allowTrailing) {
-		return (new Error('trailing characters after number: ' +
-		    JSON.stringify(str.slice(idx))));
-	}
-
-	/* If our value is 0, we return now, to avoid returning -0. */
-	if (value === 0) {
-		return (0);
-	}
-
-	/* Calculate our final value. */
-	var result = value * mult;
-
-	/*
-	 * If the string represents a value that cannot be precisely represented
-	 * by JavaScript, then we want to check that:
-	 *
-	 * - We never increased the value past MAX_SAFE_INTEGER
-	 * - We don't make the result negative and below MIN_SAFE_INTEGER
-	 *
-	 * Because we only ever increment the value during parsing, there's no
-	 * chance of moving past MAX_SAFE_INTEGER and then dropping below it
-	 * again, losing precision in the process. This means that we only need
-	 * to do our checks here, at the end.
-	 */
-	if (!options.allowImprecise &&
-	    (value > MAX_SAFE_INTEGER || result < MIN_SAFE_INTEGER)) {
-		return (new Error('number is outside of the supported range: ' +
-		    JSON.stringify(str.slice(start, idx))));
-	}
-
-	return (result);
-}
-
-
-/*
- * Interpret a character code as a base-36 digit.
- */
-function translateDigit(d)
-{
-	if (d >= CP_0 && d <= CP_9) {
-		/* '0' to '9' -> 0 to 9 */
-		return (d - PI_CONV_DEC);
-	} else if (d >= CP_A && d <= CP_Z) {
-		/* 'A' - 'Z' -> 10 to 35 */
-		return (d - PI_CONV_UC);
-	} else if (d >= CP_a && d <= CP_z) {
-		/* 'a' - 'z' -> 10 to 35 */
-		return (d - PI_CONV_LC);
-	} else {
-		/* Invalid character code */
-		return (-1);
-	}
-}
-
-
-/*
- * Test if a value matches the ECMAScript definition of trimmable whitespace.
- */
-function isSpace(c)
-{
-	return (c === 0x20) ||
-	    (c >= 0x0009 && c <= 0x000d) ||
-	    (c === 0x00a0) ||
-	    (c === 0x1680) ||
-	    (c === 0x180e) ||
-	    (c >= 0x2000 && c <= 0x200a) ||
-	    (c === 0x2028) ||
-	    (c === 0x2029) ||
-	    (c === 0x202f) ||
-	    (c === 0x205f) ||
-	    (c === 0x3000) ||
-	    (c === 0xfeff);
-}
-
-
-/*
- * Determine which base a character indicates (e.g., 'x' indicates hex).
- */
-function prefixToBase(c)
-{
-	if (c === CP_b || c === CP_B) {
-		/* 0b/0B (binary) */
-		return (2);
-	} else if (c === CP_o || c === CP_O) {
-		/* 0o/0O (octal) */
-		return (8);
-	} else if (c === CP_t || c === CP_T) {
-		/* 0t/0T (decimal) */
-		return (10);
-	} else if (c === CP_x || c === CP_X) {
-		/* 0x/0X (hexadecimal) */
-		return (16);
-	} else {
-		/* Not a meaningful character */
-		return (-1);
-	}
-}
-
-
-function validateJsonObjectJS(schema, input)
-{
-	var report = mod_jsonschema.validate(input, schema);
-
-	if (report.errors.length === 0)
-		return (null);
-
-	/* Currently, we only do anything useful with the first error. */
-	var error = report.errors[0];
-
-	/* The failed property is given by a URI with an irrelevant prefix. */
-	var propname = error['property'];
-	var reason = error['message'].toLowerCase();
-	var i, j;
-
-	/*
-	 * There's at least one case where the property error message is
-	 * confusing at best.  We work around this here.
-	 */
-	if ((i = reason.indexOf('the property ')) != -1 &&
-	    (j = reason.indexOf(' is not defined in the schema and the ' +
-	    'schema does not allow additional properties')) != -1) {
-		i += 'the property '.length;
-		if (propname === '')
-			propname = reason.substr(i, j - i);
-		else
-			propname = propname + '.' + reason.substr(i, j - i);
-
-		reason = 'unsupported property';
-	}
-
-	var rv = new mod_verror.VError('property "%s": %s', propname, reason);
-	rv.jsv_details = error;
-	return (rv);
-}
-
-function randElt(arr)
-{
-	mod_assert.ok(Array.isArray(arr) && arr.length > 0,
-	    'randElt argument must be a non-empty array');
-
-	return (arr[Math.floor(Math.random() * arr.length)]);
-}
-
-function assertHrtime(a)
-{
-	mod_assert.ok(a[0] >= 0 && a[1] >= 0,
-	    'negative numbers not allowed in hrtimes');
-	mod_assert.ok(a[1] < 1e9, 'nanoseconds column overflow');
-}
-
-/*
- * Compute the time elapsed between hrtime readings A and B, where A is later
- * than B.  hrtime readings come from Node's process.hrtime().  There is no
- * defined way to represent negative deltas, so it's illegal to diff B from A
- * where the time denoted by B is later than the time denoted by A.  If this
- * becomes valuable, we can define a representation and extend the
- * implementation to support it.
- */
-function hrtimeDiff(a, b)
-{
-	assertHrtime(a);
-	assertHrtime(b);
-	mod_assert.ok(a[0] > b[0] || (a[0] == b[0] && a[1] >= b[1]),
-	    'negative differences not allowed');
-
-	var rv = [ a[0] - b[0], 0 ];
-
-	if (a[1] >= b[1]) {
-		rv[1] = a[1] - b[1];
-	} else {
-		rv[0]--;
-		rv[1] = 1e9 - (b[1] - a[1]);
-	}
-
-	return (rv);
-}
-
-/*
- * Convert a hrtime reading from the array format returned by Node's
- * process.hrtime() into a scalar number of nanoseconds.
- */
-function hrtimeNanosec(a)
-{
-	assertHrtime(a);
-
-	return (Math.floor(a[0] * 1e9 + a[1]));
-}
-
-/*
- * Convert a hrtime reading from the array format returned by Node's
- * process.hrtime() into a scalar number of microseconds.
- */
-function hrtimeMicrosec(a)
-{
-	assertHrtime(a);
-
-	return (Math.floor(a[0] * 1e6 + a[1] / 1e3));
-}
-
-/*
- * Convert a hrtime reading from the array format returned by Node's
- * process.hrtime() into a scalar number of milliseconds.
- */
-function hrtimeMillisec(a)
-{
-	assertHrtime(a);
-
-	return (Math.floor(a[0] * 1e3 + a[1] / 1e6));
-}
-
-/*
- * Add two hrtime readings A and B, overwriting A with the result of the
- * addition.  This function is useful for accumulating several hrtime intervals
- * into a counter.  Returns A.
- */
-function hrtimeAccum(a, b)
-{
-	assertHrtime(a);
-	assertHrtime(b);
-
-	/*
-	 * Accumulate the nanosecond component.
-	 */
-	a[1] += b[1];
-	if (a[1] >= 1e9) {
-		/*
-		 * The nanosecond component overflowed, so carry to the seconds
-		 * field.
-		 */
-		a[0]++;
-		a[1] -= 1e9;
-	}
-
-	/*
-	 * Accumulate the seconds component.
-	 */
-	a[0] += b[0];
-
-	return (a);
-}
-
-/*
- * Add two hrtime readings A and B, returning the result as a new hrtime array.
- * Does not modify either input argument.
- */
-function hrtimeAdd(a, b)
-{
-	assertHrtime(a);
-
-	var rv = [ a[0], a[1] ];
-
-	return (hrtimeAccum(rv, b));
-}
-
-
-/*
- * Check an object for unexpected properties.  Accepts the object to check, and
- * an array of allowed property names (strings).  Returns an array of key names
- * that were found on the object, but did not appear in the list of allowed
- * properties.  If no properties were found, the returned array will be of
- * zero length.
- */
-function extraProperties(obj, allowed)
-{
-	mod_assert.ok(typeof (obj) === 'object' && obj !== null,
-	    'obj argument must be a non-null object');
-	mod_assert.ok(Array.isArray(allowed),
-	    'allowed argument must be an array of strings');
-	for (var i = 0; i < allowed.length; i++) {
-		mod_assert.ok(typeof (allowed[i]) === 'string',
-		    'allowed argument must be an array of strings');
-	}
-
-	return (Object.keys(obj).filter(function (key) {
-		return (allowed.indexOf(key) === -1);
-	}));
-}
-
-/*
- * Given three sets of properties "provided" (may be undefined), "overrides"
- * (required), and "defaults" (may be undefined), construct an object containing
- * the union of these sets with "overrides" overriding "provided", and
- * "provided" overriding "defaults".  None of the input objects are modified.
- */
-function mergeObjects(provided, overrides, defaults)
-{
-	var rv, k;
-
-	rv = {};
-	if (defaults) {
-		for (k in defaults)
-			rv[k] = defaults[k];
-	}
-
-	if (provided) {
-		for (k in provided)
-			rv[k] = provided[k];
-	}
-
-	if (overrides) {
-		for (k in overrides)
-			rv[k] = overrides[k];
-	}
-
-	return (rv);
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+
+module.exports = validate;
+
+const { RequestError } = __webpack_require__(463);
+const get = __webpack_require__(854);
+const set = __webpack_require__(883);
+
+function validate(octokit, options) {
+  if (!options.request.validate) {
+    return;
+  }
+  const { validate: params } = options.request;
+
+  Object.keys(params).forEach(parameterName => {
+    const parameter = get(params, parameterName);
+
+    const expectedType = parameter.type;
+    let parentParameterName;
+    let parentValue;
+    let parentParamIsPresent = true;
+    let parentParameterIsArray = false;
+
+    if (/\./.test(parameterName)) {
+      parentParameterName = parameterName.replace(/\.[^.]+$/, "");
+      parentParameterIsArray = parentParameterName.slice(-2) === "[]";
+      if (parentParameterIsArray) {
+        parentParameterName = parentParameterName.slice(0, -2);
+      }
+      parentValue = get(options, parentParameterName);
+      parentParamIsPresent =
+        parentParameterName === "headers" ||
+        (typeof parentValue === "object" && parentValue !== null);
+    }
+
+    const values = parentParameterIsArray
+      ? (get(options, parentParameterName) || []).map(
+          value => value[parameterName.split(/\./).pop()]
+        )
+      : [get(options, parameterName)];
+
+    values.forEach((value, i) => {
+      const valueIsPresent = typeof value !== "undefined";
+      const valueIsNull = value === null;
+      const currentParameterName = parentParameterIsArray
+        ? parameterName.replace(/\[\]/, `[${i}]`)
+        : parameterName;
+
+      if (!parameter.required && !valueIsPresent) {
+        return;
+      }
+
+      // if the parent parameter is of type object but allows null
+      // then the child parameters can be ignored
+      if (!parentParamIsPresent) {
+        return;
+      }
+
+      if (parameter.allowNull && valueIsNull) {
+        return;
+      }
+
+      if (!parameter.allowNull && valueIsNull) {
+        throw new RequestError(
+          `'${currentParameterName}' cannot be null`,
+          400,
+          {
+            request: options
+          }
+        );
+      }
+
+      if (parameter.required && !valueIsPresent) {
+        throw new RequestError(
+          `Empty value for parameter '${currentParameterName}': ${JSON.stringify(
+            value
+          )}`,
+          400,
+          {
+            request: options
+          }
+        );
+      }
+
+      // parse to integer before checking for enum
+      // so that string "1" will match enum with number 1
+      if (expectedType === "integer") {
+        const unparsedValue = value;
+        value = parseInt(value, 10);
+        if (isNaN(value)) {
+          throw new RequestError(
+            `Invalid value for parameter '${currentParameterName}': ${JSON.stringify(
+              unparsedValue
+            )} is NaN`,
+            400,
+            {
+              request: options
+            }
+          );
+        }
+      }
+
+      if (parameter.enum && parameter.enum.indexOf(String(value)) === -1) {
+        throw new RequestError(
+          `Invalid value for parameter '${currentParameterName}': ${JSON.stringify(
+            value
+          )}`,
+          400,
+          {
+            request: options
+          }
+        );
+      }
+
+      if (parameter.validation) {
+        const regex = new RegExp(parameter.validation);
+        if (!regex.test(value)) {
+          throw new RequestError(
+            `Invalid value for parameter '${currentParameterName}': ${JSON.stringify(
+              value
+            )}`,
+            400,
+            {
+              request: options
+            }
+          );
+        }
+      }
+
+      if (expectedType === "object" && typeof value === "string") {
+        try {
+          value = JSON.parse(value);
+        } catch (exception) {
+          throw new RequestError(
+            `JSON parse error of value for parameter '${currentParameterName}': ${JSON.stringify(
+              value
+            )}`,
+            400,
+            {
+              request: options
+            }
+          );
+        }
+      }
+
+      set(options, parameter.mapTo || currentParameterName, value);
+    });
+  });
+
+  return options;
 }
 
 
@@ -15280,757 +19274,60 @@ function mergeObjects(provided, overrides, defaults)
 /* 349 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
-// Copyright 2017 Joyent, Inc.
-
-module.exports = {
-	read: read,
-	verify: verify,
-	sign: sign,
-	signAsync: signAsync,
-	write: write
-};
-
-var assert = __webpack_require__(489);
-var asn1 = __webpack_require__(62);
-var Buffer = __webpack_require__(215).Buffer;
-var algs = __webpack_require__(98);
-var utils = __webpack_require__(270);
-var Key = __webpack_require__(852);
-var PrivateKey = __webpack_require__(502);
-var pem = __webpack_require__(268);
-var Identity = __webpack_require__(378);
-var Signature = __webpack_require__(575);
-var Certificate = __webpack_require__(752);
-var pkcs8 = __webpack_require__(707);
-
-/*
- * This file is based on RFC5280 (X.509).
- */
-
-/* Helper to read in a single mpint */
-function readMPInt(der, nm) {
-	assert.strictEqual(der.peek(), asn1.Ber.Integer,
-	    nm + ' is not an Integer');
-	return (utils.mpNormalize(der.readString(asn1.Ber.Integer, true)));
-}
-
-function verify(cert, key) {
-	var sig = cert.signatures.x509;
-	assert.object(sig, 'x509 signature');
-
-	var algParts = sig.algo.split('-');
-	if (algParts[0] !== key.type)
-		return (false);
-
-	var blob = sig.cache;
-	if (blob === undefined) {
-		var der = new asn1.BerWriter();
-		writeTBSCert(cert, der);
-		blob = der.buffer;
-	}
-
-	var verifier = key.createVerify(algParts[1]);
-	verifier.write(blob);
-	return (verifier.verify(sig.signature));
-}
-
-function Local(i) {
-	return (asn1.Ber.Context | asn1.Ber.Constructor | i);
-}
-
-function Context(i) {
-	return (asn1.Ber.Context | i);
-}
-
-var SIGN_ALGS = {
-	'rsa-md5': '1.2.840.113549.1.1.4',
-	'rsa-sha1': '1.2.840.113549.1.1.5',
-	'rsa-sha256': '1.2.840.113549.1.1.11',
-	'rsa-sha384': '1.2.840.113549.1.1.12',
-	'rsa-sha512': '1.2.840.113549.1.1.13',
-	'dsa-sha1': '1.2.840.10040.4.3',
-	'dsa-sha256': '2.16.840.1.101.3.4.3.2',
-	'ecdsa-sha1': '1.2.840.10045.4.1',
-	'ecdsa-sha256': '1.2.840.10045.4.3.2',
-	'ecdsa-sha384': '1.2.840.10045.4.3.3',
-	'ecdsa-sha512': '1.2.840.10045.4.3.4',
-	'ed25519-sha512': '1.3.101.112'
-};
-Object.keys(SIGN_ALGS).forEach(function (k) {
-	SIGN_ALGS[SIGN_ALGS[k]] = k;
-});
-SIGN_ALGS['1.3.14.3.2.3'] = 'rsa-md5';
-SIGN_ALGS['1.3.14.3.2.29'] = 'rsa-sha1';
-
-var EXTS = {
-	'issuerKeyId': '2.5.29.35',
-	'altName': '2.5.29.17',
-	'basicConstraints': '2.5.29.19',
-	'keyUsage': '2.5.29.15',
-	'extKeyUsage': '2.5.29.37'
-};
-
-function read(buf, options) {
-	if (typeof (buf) === 'string') {
-		buf = Buffer.from(buf, 'binary');
-	}
-	assert.buffer(buf, 'buf');
-
-	var der = new asn1.BerReader(buf);
-
-	der.readSequence();
-	if (Math.abs(der.length - der.remain) > 1) {
-		throw (new Error('DER sequence does not contain whole byte ' +
-		    'stream'));
-	}
-
-	var tbsStart = der.offset;
-	der.readSequence();
-	var sigOffset = der.offset + der.length;
-	var tbsEnd = sigOffset;
-
-	if (der.peek() === Local(0)) {
-		der.readSequence(Local(0));
-		var version = der.readInt();
-		assert.ok(version <= 3,
-		    'only x.509 versions up to v3 supported');
-	}
-
-	var cert = {};
-	cert.signatures = {};
-	var sig = (cert.signatures.x509 = {});
-	sig.extras = {};
-
-	cert.serial = readMPInt(der, 'serial');
-
-	der.readSequence();
-	var after = der.offset + der.length;
-	var certAlgOid = der.readOID();
-	var certAlg = SIGN_ALGS[certAlgOid];
-	if (certAlg === undefined)
-		throw (new Error('unknown signature algorithm ' + certAlgOid));
-
-	der._offset = after;
-	cert.issuer = Identity.parseAsn1(der);
-
-	der.readSequence();
-	cert.validFrom = readDate(der);
-	cert.validUntil = readDate(der);
-
-	cert.subjects = [Identity.parseAsn1(der)];
-
-	der.readSequence();
-	after = der.offset + der.length;
-	cert.subjectKey = pkcs8.readPkcs8(undefined, 'public', der);
-	der._offset = after;
-
-	/* issuerUniqueID */
-	if (der.peek() === Local(1)) {
-		der.readSequence(Local(1));
-		sig.extras.issuerUniqueID =
-		    buf.slice(der.offset, der.offset + der.length);
-		der._offset += der.length;
-	}
-
-	/* subjectUniqueID */
-	if (der.peek() === Local(2)) {
-		der.readSequence(Local(2));
-		sig.extras.subjectUniqueID =
-		    buf.slice(der.offset, der.offset + der.length);
-		der._offset += der.length;
-	}
-
-	/* extensions */
-	if (der.peek() === Local(3)) {
-		der.readSequence(Local(3));
-		var extEnd = der.offset + der.length;
-		der.readSequence();
-
-		while (der.offset < extEnd)
-			readExtension(cert, buf, der);
-
-		assert.strictEqual(der.offset, extEnd);
-	}
-
-	assert.strictEqual(der.offset, sigOffset);
-
-	der.readSequence();
-	after = der.offset + der.length;
-	var sigAlgOid = der.readOID();
-	var sigAlg = SIGN_ALGS[sigAlgOid];
-	if (sigAlg === undefined)
-		throw (new Error('unknown signature algorithm ' + sigAlgOid));
-	der._offset = after;
-
-	var sigData = der.readString(asn1.Ber.BitString, true);
-	if (sigData[0] === 0)
-		sigData = sigData.slice(1);
-	var algParts = sigAlg.split('-');
-
-	sig.signature = Signature.parse(sigData, algParts[0], 'asn1');
-	sig.signature.hashAlgorithm = algParts[1];
-	sig.algo = sigAlg;
-	sig.cache = buf.slice(tbsStart, tbsEnd);
-
-	return (new Certificate(cert));
-}
-
-function readDate(der) {
-	if (der.peek() === asn1.Ber.UTCTime) {
-		return (utcTimeToDate(der.readString(asn1.Ber.UTCTime)));
-	} else if (der.peek() === asn1.Ber.GeneralizedTime) {
-		return (gTimeToDate(der.readString(asn1.Ber.GeneralizedTime)));
-	} else {
-		throw (new Error('Unsupported date format'));
-	}
-}
-
-function writeDate(der, date) {
-	if (date.getUTCFullYear() >= 2050 || date.getUTCFullYear() < 1950) {
-		der.writeString(dateToGTime(date), asn1.Ber.GeneralizedTime);
-	} else {
-		der.writeString(dateToUTCTime(date), asn1.Ber.UTCTime);
-	}
-}
-
-/* RFC5280, section 4.2.1.6 (GeneralName type) */
-var ALTNAME = {
-	OtherName: Local(0),
-	RFC822Name: Context(1),
-	DNSName: Context(2),
-	X400Address: Local(3),
-	DirectoryName: Local(4),
-	EDIPartyName: Local(5),
-	URI: Context(6),
-	IPAddress: Context(7),
-	OID: Context(8)
-};
-
-/* RFC5280, section 4.2.1.12 (KeyPurposeId) */
-var EXTPURPOSE = {
-	'serverAuth': '1.3.6.1.5.5.7.3.1',
-	'clientAuth': '1.3.6.1.5.5.7.3.2',
-	'codeSigning': '1.3.6.1.5.5.7.3.3',
-
-	/* See https://github.com/joyent/oid-docs/blob/master/root.md */
-	'joyentDocker': '1.3.6.1.4.1.38678.1.4.1',
-	'joyentCmon': '1.3.6.1.4.1.38678.1.4.2'
-};
-var EXTPURPOSE_REV = {};
-Object.keys(EXTPURPOSE).forEach(function (k) {
-	EXTPURPOSE_REV[EXTPURPOSE[k]] = k;
-});
-
-var KEYUSEBITS = [
-	'signature', 'identity', 'keyEncryption',
-	'encryption', 'keyAgreement', 'ca', 'crl'
-];
-
-function readExtension(cert, buf, der) {
-	der.readSequence();
-	var after = der.offset + der.length;
-	var extId = der.readOID();
-	var id;
-	var sig = cert.signatures.x509;
-	if (!sig.extras.exts)
-		sig.extras.exts = [];
-
-	var critical;
-	if (der.peek() === asn1.Ber.Boolean)
-		critical = der.readBoolean();
-
-	switch (extId) {
-	case (EXTS.basicConstraints):
-		der.readSequence(asn1.Ber.OctetString);
-		der.readSequence();
-		var bcEnd = der.offset + der.length;
-		var ca = false;
-		if (der.peek() === asn1.Ber.Boolean)
-			ca = der.readBoolean();
-		if (cert.purposes === undefined)
-			cert.purposes = [];
-		if (ca === true)
-			cert.purposes.push('ca');
-		var bc = { oid: extId, critical: critical };
-		if (der.offset < bcEnd && der.peek() === asn1.Ber.Integer)
-			bc.pathLen = der.readInt();
-		sig.extras.exts.push(bc);
-		break;
-	case (EXTS.extKeyUsage):
-		der.readSequence(asn1.Ber.OctetString);
-		der.readSequence();
-		if (cert.purposes === undefined)
-			cert.purposes = [];
-		var ekEnd = der.offset + der.length;
-		while (der.offset < ekEnd) {
-			var oid = der.readOID();
-			cert.purposes.push(EXTPURPOSE_REV[oid] || oid);
-		}
-		/*
-		 * This is a bit of a hack: in the case where we have a cert
-		 * that's only allowed to do serverAuth or clientAuth (and not
-		 * the other), we want to make sure all our Subjects are of
-		 * the right type. But we already parsed our Subjects and
-		 * decided if they were hosts or users earlier (since it appears
-		 * first in the cert).
-		 *
-		 * So we go through and mutate them into the right kind here if
-		 * it doesn't match. This might not be hugely beneficial, as it
-		 * seems that single-purpose certs are not often seen in the
-		 * wild.
-		 */
-		if (cert.purposes.indexOf('serverAuth') !== -1 &&
-		    cert.purposes.indexOf('clientAuth') === -1) {
-			cert.subjects.forEach(function (ide) {
-				if (ide.type !== 'host') {
-					ide.type = 'host';
-					ide.hostname = ide.uid ||
-					    ide.email ||
-					    ide.components[0].value;
-				}
-			});
-		} else if (cert.purposes.indexOf('clientAuth') !== -1 &&
-		    cert.purposes.indexOf('serverAuth') === -1) {
-			cert.subjects.forEach(function (ide) {
-				if (ide.type !== 'user') {
-					ide.type = 'user';
-					ide.uid = ide.hostname ||
-					    ide.email ||
-					    ide.components[0].value;
-				}
-			});
-		}
-		sig.extras.exts.push({ oid: extId, critical: critical });
-		break;
-	case (EXTS.keyUsage):
-		der.readSequence(asn1.Ber.OctetString);
-		var bits = der.readString(asn1.Ber.BitString, true);
-		var setBits = readBitField(bits, KEYUSEBITS);
-		setBits.forEach(function (bit) {
-			if (cert.purposes === undefined)
-				cert.purposes = [];
-			if (cert.purposes.indexOf(bit) === -1)
-				cert.purposes.push(bit);
-		});
-		sig.extras.exts.push({ oid: extId, critical: critical,
-		    bits: bits });
-		break;
-	case (EXTS.altName):
-		der.readSequence(asn1.Ber.OctetString);
-		der.readSequence();
-		var aeEnd = der.offset + der.length;
-		while (der.offset < aeEnd) {
-			switch (der.peek()) {
-			case ALTNAME.OtherName:
-			case ALTNAME.EDIPartyName:
-				der.readSequence();
-				der._offset += der.length;
-				break;
-			case ALTNAME.OID:
-				der.readOID(ALTNAME.OID);
-				break;
-			case ALTNAME.RFC822Name:
-				/* RFC822 specifies email addresses */
-				var email = der.readString(ALTNAME.RFC822Name);
-				id = Identity.forEmail(email);
-				if (!cert.subjects[0].equals(id))
-					cert.subjects.push(id);
-				break;
-			case ALTNAME.DirectoryName:
-				der.readSequence(ALTNAME.DirectoryName);
-				id = Identity.parseAsn1(der);
-				if (!cert.subjects[0].equals(id))
-					cert.subjects.push(id);
-				break;
-			case ALTNAME.DNSName:
-				var host = der.readString(
-				    ALTNAME.DNSName);
-				id = Identity.forHost(host);
-				if (!cert.subjects[0].equals(id))
-					cert.subjects.push(id);
-				break;
-			default:
-				der.readString(der.peek());
-				break;
-			}
-		}
-		sig.extras.exts.push({ oid: extId, critical: critical });
-		break;
-	default:
-		sig.extras.exts.push({
-			oid: extId,
-			critical: critical,
-			data: der.readString(asn1.Ber.OctetString, true)
-		});
-		break;
-	}
-
-	der._offset = after;
-}
-
-var UTCTIME_RE =
-    /^([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})?Z$/;
-function utcTimeToDate(t) {
-	var m = t.match(UTCTIME_RE);
-	assert.ok(m, 'timestamps must be in UTC');
-	var d = new Date();
-
-	var thisYear = d.getUTCFullYear();
-	var century = Math.floor(thisYear / 100) * 100;
-
-	var year = parseInt(m[1], 10);
-	if (thisYear % 100 < 50 && year >= 60)
-		year += (century - 1);
-	else
-		year += century;
-	d.setUTCFullYear(year, parseInt(m[2], 10) - 1, parseInt(m[3], 10));
-	d.setUTCHours(parseInt(m[4], 10), parseInt(m[5], 10));
-	if (m[6] && m[6].length > 0)
-		d.setUTCSeconds(parseInt(m[6], 10));
-	return (d);
-}
-
-var GTIME_RE =
-    /^([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})?Z$/;
-function gTimeToDate(t) {
-	var m = t.match(GTIME_RE);
-	assert.ok(m);
-	var d = new Date();
-
-	d.setUTCFullYear(parseInt(m[1], 10), parseInt(m[2], 10) - 1,
-	    parseInt(m[3], 10));
-	d.setUTCHours(parseInt(m[4], 10), parseInt(m[5], 10));
-	if (m[6] && m[6].length > 0)
-		d.setUTCSeconds(parseInt(m[6], 10));
-	return (d);
-}
-
-function zeroPad(n, m) {
-	if (m === undefined)
-		m = 2;
-	var s = '' + n;
-	while (s.length < m)
-		s = '0' + s;
-	return (s);
-}
-
-function dateToUTCTime(d) {
-	var s = '';
-	s += zeroPad(d.getUTCFullYear() % 100);
-	s += zeroPad(d.getUTCMonth() + 1);
-	s += zeroPad(d.getUTCDate());
-	s += zeroPad(d.getUTCHours());
-	s += zeroPad(d.getUTCMinutes());
-	s += zeroPad(d.getUTCSeconds());
-	s += 'Z';
-	return (s);
-}
-
-function dateToGTime(d) {
-	var s = '';
-	s += zeroPad(d.getUTCFullYear(), 4);
-	s += zeroPad(d.getUTCMonth() + 1);
-	s += zeroPad(d.getUTCDate());
-	s += zeroPad(d.getUTCHours());
-	s += zeroPad(d.getUTCMinutes());
-	s += zeroPad(d.getUTCSeconds());
-	s += 'Z';
-	return (s);
-}
-
-function sign(cert, key) {
-	if (cert.signatures.x509 === undefined)
-		cert.signatures.x509 = {};
-	var sig = cert.signatures.x509;
-
-	sig.algo = key.type + '-' + key.defaultHashAlgorithm();
-	if (SIGN_ALGS[sig.algo] === undefined)
-		return (false);
-
-	var der = new asn1.BerWriter();
-	writeTBSCert(cert, der);
-	var blob = der.buffer;
-	sig.cache = blob;
-
-	var signer = key.createSign();
-	signer.write(blob);
-	cert.signatures.x509.signature = signer.sign();
-
-	return (true);
-}
-
-function signAsync(cert, signer, done) {
-	if (cert.signatures.x509 === undefined)
-		cert.signatures.x509 = {};
-	var sig = cert.signatures.x509;
-
-	var der = new asn1.BerWriter();
-	writeTBSCert(cert, der);
-	var blob = der.buffer;
-	sig.cache = blob;
-
-	signer(blob, function (err, signature) {
-		if (err) {
-			done(err);
-			return;
-		}
-		sig.algo = signature.type + '-' + signature.hashAlgorithm;
-		if (SIGN_ALGS[sig.algo] === undefined) {
-			done(new Error('Invalid signing algorithm "' +
-			    sig.algo + '"'));
-			return;
-		}
-		sig.signature = signature;
-		done();
-	});
-}
-
-function write(cert, options) {
-	var sig = cert.signatures.x509;
-	assert.object(sig, 'x509 signature');
-
-	var der = new asn1.BerWriter();
-	der.startSequence();
-	if (sig.cache) {
-		der._ensure(sig.cache.length);
-		sig.cache.copy(der._buf, der._offset);
-		der._offset += sig.cache.length;
-	} else {
-		writeTBSCert(cert, der);
-	}
-
-	der.startSequence();
-	der.writeOID(SIGN_ALGS[sig.algo]);
-	if (sig.algo.match(/^rsa-/))
-		der.writeNull();
-	der.endSequence();
-
-	var sigData = sig.signature.toBuffer('asn1');
-	var data = Buffer.alloc(sigData.length + 1);
-	data[0] = 0;
-	sigData.copy(data, 1);
-	der.writeBuffer(data, asn1.Ber.BitString);
-	der.endSequence();
-
-	return (der.buffer);
-}
-
-function writeTBSCert(cert, der) {
-	var sig = cert.signatures.x509;
-	assert.object(sig, 'x509 signature');
-
-	der.startSequence();
-
-	der.startSequence(Local(0));
-	der.writeInt(2);
-	der.endSequence();
-
-	der.writeBuffer(utils.mpNormalize(cert.serial), asn1.Ber.Integer);
-
-	der.startSequence();
-	der.writeOID(SIGN_ALGS[sig.algo]);
-	if (sig.algo.match(/^rsa-/))
-		der.writeNull();
-	der.endSequence();
-
-	cert.issuer.toAsn1(der);
-
-	der.startSequence();
-	writeDate(der, cert.validFrom);
-	writeDate(der, cert.validUntil);
-	der.endSequence();
-
-	var subject = cert.subjects[0];
-	var altNames = cert.subjects.slice(1);
-	subject.toAsn1(der);
-
-	pkcs8.writePkcs8(der, cert.subjectKey);
-
-	if (sig.extras && sig.extras.issuerUniqueID) {
-		der.writeBuffer(sig.extras.issuerUniqueID, Local(1));
-	}
-
-	if (sig.extras && sig.extras.subjectUniqueID) {
-		der.writeBuffer(sig.extras.subjectUniqueID, Local(2));
-	}
-
-	if (altNames.length > 0 || subject.type === 'host' ||
-	    (cert.purposes !== undefined && cert.purposes.length > 0) ||
-	    (sig.extras && sig.extras.exts)) {
-		der.startSequence(Local(3));
-		der.startSequence();
-
-		var exts = [];
-		if (cert.purposes !== undefined && cert.purposes.length > 0) {
-			exts.push({
-				oid: EXTS.basicConstraints,
-				critical: true
-			});
-			exts.push({
-				oid: EXTS.keyUsage,
-				critical: true
-			});
-			exts.push({
-				oid: EXTS.extKeyUsage,
-				critical: true
-			});
-		}
-		exts.push({ oid: EXTS.altName });
-		if (sig.extras && sig.extras.exts)
-			exts = sig.extras.exts;
-
-		for (var i = 0; i < exts.length; ++i) {
-			der.startSequence();
-			der.writeOID(exts[i].oid);
-
-			if (exts[i].critical !== undefined)
-				der.writeBoolean(exts[i].critical);
-
-			if (exts[i].oid === EXTS.altName) {
-				der.startSequence(asn1.Ber.OctetString);
-				der.startSequence();
-				if (subject.type === 'host') {
-					der.writeString(subject.hostname,
-					    Context(2));
-				}
-				for (var j = 0; j < altNames.length; ++j) {
-					if (altNames[j].type === 'host') {
-						der.writeString(
-						    altNames[j].hostname,
-						    ALTNAME.DNSName);
-					} else if (altNames[j].type ===
-					    'email') {
-						der.writeString(
-						    altNames[j].email,
-						    ALTNAME.RFC822Name);
-					} else {
-						/*
-						 * Encode anything else as a
-						 * DN style name for now.
-						 */
-						der.startSequence(
-						    ALTNAME.DirectoryName);
-						altNames[j].toAsn1(der);
-						der.endSequence();
-					}
-				}
-				der.endSequence();
-				der.endSequence();
-			} else if (exts[i].oid === EXTS.basicConstraints) {
-				der.startSequence(asn1.Ber.OctetString);
-				der.startSequence();
-				var ca = (cert.purposes.indexOf('ca') !== -1);
-				var pathLen = exts[i].pathLen;
-				der.writeBoolean(ca);
-				if (pathLen !== undefined)
-					der.writeInt(pathLen);
-				der.endSequence();
-				der.endSequence();
-			} else if (exts[i].oid === EXTS.extKeyUsage) {
-				der.startSequence(asn1.Ber.OctetString);
-				der.startSequence();
-				cert.purposes.forEach(function (purpose) {
-					if (purpose === 'ca')
-						return;
-					if (KEYUSEBITS.indexOf(purpose) !== -1)
-						return;
-					var oid = purpose;
-					if (EXTPURPOSE[purpose] !== undefined)
-						oid = EXTPURPOSE[purpose];
-					der.writeOID(oid);
-				});
-				der.endSequence();
-				der.endSequence();
-			} else if (exts[i].oid === EXTS.keyUsage) {
-				der.startSequence(asn1.Ber.OctetString);
-				/*
-				 * If we parsed this certificate from a byte
-				 * stream (i.e. we didn't generate it in sshpk)
-				 * then we'll have a ".bits" property on the
-				 * ext with the original raw byte contents.
-				 *
-				 * If we have this, use it here instead of
-				 * regenerating it. This guarantees we output
-				 * the same data we parsed, so signatures still
-				 * validate.
-				 */
-				if (exts[i].bits !== undefined) {
-					der.writeBuffer(exts[i].bits,
-					    asn1.Ber.BitString);
-				} else {
-					var bits = writeBitField(cert.purposes,
-					    KEYUSEBITS);
-					der.writeBuffer(bits,
-					    asn1.Ber.BitString);
-				}
-				der.endSequence();
-			} else {
-				der.writeBuffer(exts[i].data,
-				    asn1.Ber.OctetString);
-			}
-
-			der.endSequence();
-		}
-
-		der.endSequence();
-		der.endSequence();
-	}
-
-	der.endSequence();
-}
-
-/*
- * Reads an ASN.1 BER bitfield out of the Buffer produced by doing
- * `BerReader#readString(asn1.Ber.BitString)`. That function gives us the raw
- * contents of the BitString tag, which is a count of unused bits followed by
- * the bits as a right-padded byte string.
- *
- * `bits` is the Buffer, `bitIndex` should contain an array of string names
- * for the bits in the string, ordered starting with bit #0 in the ASN.1 spec.
- *
- * Returns an array of Strings, the names of the bits that were set to 1.
- */
-function readBitField(bits, bitIndex) {
-	var bitLen = 8 * (bits.length - 1) - bits[0];
-	var setBits = {};
-	for (var i = 0; i < bitLen; ++i) {
-		var byteN = 1 + Math.floor(i / 8);
-		var bit = 7 - (i % 8);
-		var mask = 1 << bit;
-		var bitVal = ((bits[byteN] & mask) !== 0);
-		var name = bitIndex[i];
-		if (bitVal && typeof (name) === 'string') {
-			setBits[name] = true;
-		}
-	}
-	return (Object.keys(setBits));
-}
-
-/*
- * `setBits` is an array of strings, containing the names for each bit that
- * sould be set to 1. `bitIndex` is same as in `readBitField()`.
- *
- * Returns a Buffer, ready to be written out with `BerWriter#writeString()`.
- */
-function writeBitField(setBits, bitIndex) {
-	var bitLen = bitIndex.length;
-	var blen = Math.ceil(bitLen / 8);
-	var unused = blen * 8 - bitLen;
-	var bits = Buffer.alloc(1 + blen); // zero-filled
-	bits[0] = unused;
-	for (var i = 0; i < bitLen; ++i) {
-		var byteN = 1 + Math.floor(i / 8);
-		var bit = 7 - (i % 8);
-		var mask = 1 << bit;
-		var name = bitIndex[i];
-		if (name === undefined)
-			continue;
-		var bitVal = (setBits.indexOf(name) !== -1);
-		if (bitVal) {
-			bits[byteN] |= mask;
-		}
-	}
-	return (bits);
+module.exports = authenticationRequestError;
+
+const { RequestError } = __webpack_require__(463);
+
+function authenticationRequestError(state, error, options) {
+  /* istanbul ignore next */
+  if (!error.headers) throw error;
+
+  const otpRequired = /required/.test(error.headers["x-github-otp"] || "");
+  // handle "2FA required" error only
+  if (error.status !== 401 || !otpRequired) {
+    throw error;
+  }
+
+  if (
+    error.status === 401 &&
+    otpRequired &&
+    error.request &&
+    error.request.headers["x-github-otp"]
+  ) {
+    throw new RequestError(
+      "Invalid one-time password for two-factor authentication",
+      401,
+      {
+        headers: error.headers,
+        request: options
+      }
+    );
+  }
+
+  if (typeof state.auth.on2fa !== "function") {
+    throw new RequestError(
+      "2FA required, but options.on2fa is not a function. See https://github.com/octokit/rest.js#authentication",
+      401,
+      {
+        headers: error.headers,
+        request: options
+      }
+    );
+  }
+
+  return Promise.resolve()
+    .then(() => {
+      return state.auth.on2fa();
+    })
+    .then(oneTimePassword => {
+      const newOptions = Object.assign(options, {
+        headers: Object.assign(
+          { "x-github-otp": oneTimePassword },
+          options.headers
+        )
+      });
+      return state.octokit.request(newOptions);
+    });
 }
 
 
@@ -16176,100 +19473,36 @@ module.exports = {
 
 /***/ }),
 /* 363 */
-/***/ (function(module, __unusedexports, __webpack_require__) {
+/***/ (function(module) {
 
-// Copyright 2015 Joyent, Inc.
+module.exports = register
 
-module.exports = {
-	Verifier: Verifier,
-	Signer: Signer
-};
+function register (state, name, method, options) {
+  if (typeof method !== 'function') {
+    throw new Error('method for before hook must be a function')
+  }
 
-var nacl = __webpack_require__(196);
-var stream = __webpack_require__(413);
-var util = __webpack_require__(669);
-var assert = __webpack_require__(489);
-var Buffer = __webpack_require__(215).Buffer;
-var Signature = __webpack_require__(575);
+  if (!options) {
+    options = {}
+  }
 
-function Verifier(key, hashAlgo) {
-	if (hashAlgo.toLowerCase() !== 'sha512')
-		throw (new Error('ED25519 only supports the use of ' +
-		    'SHA-512 hashes'));
+  if (Array.isArray(name)) {
+    return name.reverse().reduce(function (callback, name) {
+      return register.bind(null, state, name, callback, options)
+    }, method)()
+  }
 
-	this.key = key;
-	this.chunks = [];
+  return Promise.resolve()
+    .then(function () {
+      if (!state.registry[name]) {
+        return method(options)
+      }
 
-	stream.Writable.call(this, {});
+      return (state.registry[name]).reduce(function (method, registered) {
+        return registered.hook.bind(null, method, options)
+      }, method)()
+    })
 }
-util.inherits(Verifier, stream.Writable);
-
-Verifier.prototype._write = function (chunk, enc, cb) {
-	this.chunks.push(chunk);
-	cb();
-};
-
-Verifier.prototype.update = function (chunk) {
-	if (typeof (chunk) === 'string')
-		chunk = Buffer.from(chunk, 'binary');
-	this.chunks.push(chunk);
-};
-
-Verifier.prototype.verify = function (signature, fmt) {
-	var sig;
-	if (Signature.isSignature(signature, [2, 0])) {
-		if (signature.type !== 'ed25519')
-			return (false);
-		sig = signature.toBuffer('raw');
-
-	} else if (typeof (signature) === 'string') {
-		sig = Buffer.from(signature, 'base64');
-
-	} else if (Signature.isSignature(signature, [1, 0])) {
-		throw (new Error('signature was created by too old ' +
-		    'a version of sshpk and cannot be verified'));
-	}
-
-	assert.buffer(sig);
-	return (nacl.sign.detached.verify(
-	    new Uint8Array(Buffer.concat(this.chunks)),
-	    new Uint8Array(sig),
-	    new Uint8Array(this.key.part.A.data)));
-};
-
-function Signer(key, hashAlgo) {
-	if (hashAlgo.toLowerCase() !== 'sha512')
-		throw (new Error('ED25519 only supports the use of ' +
-		    'SHA-512 hashes'));
-
-	this.key = key;
-	this.chunks = [];
-
-	stream.Writable.call(this, {});
-}
-util.inherits(Signer, stream.Writable);
-
-Signer.prototype._write = function (chunk, enc, cb) {
-	this.chunks.push(chunk);
-	cb();
-};
-
-Signer.prototype.update = function (chunk) {
-	if (typeof (chunk) === 'string')
-		chunk = Buffer.from(chunk, 'binary');
-	this.chunks.push(chunk);
-};
-
-Signer.prototype.sign = function () {
-	var sig = nacl.sign.detached(
-	    new Uint8Array(Buffer.concat(this.chunks)),
-	    new Uint8Array(Buffer.concat([
-		this.key.part.k.data, this.key.part.A.data])));
-	var sigBuf = Buffer.from(sig);
-	var sigObj = Signature.parse(sigBuf, 'ed25519', 'raw');
-	sigObj.hashAlgorithm = 'sha512';
-	return (sigObj);
-};
 
 
 /***/ }),
@@ -16277,9 +19510,34 @@ Signer.prototype.sign = function () {
 /* 365 */,
 /* 366 */,
 /* 367 */,
-/* 368 */,
+/* 368 */
+/***/ (function(module) {
+
+module.exports = function atob(str) {
+  return Buffer.from(str, 'base64').toString('binary')
+}
+
+
+/***/ }),
 /* 369 */,
-/* 370 */,
+/* 370 */
+/***/ (function(module) {
+
+module.exports = deprecate
+
+const loggedMessages = {}
+
+function deprecate (message) {
+  if (loggedMessages[message]) {
+    return
+  }
+
+  console.warn(`DEPRECATED (@octokit/rest): ${message}`)
+  loggedMessages[message] = 1
+}
+
+
+/***/ }),
 /* 371 */,
 /* 372 */,
 /* 373 */,
@@ -16408,7 +19666,83 @@ module.exports = function extend() {
 
 /***/ }),
 /* 375 */,
-/* 376 */,
+/* 376 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+var __rest = (this && this.__rest) || function (s, e) {
+    var t = {};
+    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+        t[p] = s[p];
+    if (s != null && typeof Object.getOwnPropertySymbols === "function")
+        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) if (e.indexOf(p[i]) < 0)
+            t[p[i]] = s[p[i]];
+    return t;
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const request = __webpack_require__(99);
+const user_1 = __webpack_require__(14);
+const tag_1 = __webpack_require__(277);
+const issue_1 = __webpack_require__(953);
+const project_1 = __webpack_require__(102);
+const agile_1 = __webpack_require__(840);
+const sprint_1 = __webpack_require__(24);
+const workitem_1 = __webpack_require__(501);
+const comment_1 = __webpack_require__(179);
+class Youtrack {
+    constructor(options) {
+        this.defaultRequestOptions = { jar: true, json: true };
+        this.defaultRequestOptions = Object.assign({}, this.defaultRequestOptions, { headers: {
+                Authorization: `Bearer ${options.token}`
+            } });
+        this.baseUrl = this.formBaseUrl(options.baseUrl);
+        this.users = new user_1.UserEndpoint(this);
+        this.tags = new tag_1.TagEndpoint(this);
+        this.issues = new issue_1.IssueEndpoint(this);
+        this.projects = new project_1.ProjectEndpoint(this);
+        this.agiles = new agile_1.AgileEndpoint(this);
+        this.sprints = new sprint_1.SprintEndpoint(this);
+        this.workItems = new workitem_1.WorkItemEndpoint(this);
+        this.comments = new comment_1.CommentEndpoint(this);
+    }
+    post(url, params = {}, headers = {}) {
+        return request.post(this.baseUrl + url, this.prepareParams(params, headers));
+    }
+    get(url, params = {}, headers = {}) {
+        return request.get(this.baseUrl + url, this.prepareParams(params, headers));
+    }
+    delete(url, params = {}, headers = {}) {
+        return request.delete(this.baseUrl + url, this.prepareParams(params, headers));
+    }
+    put(url, params = {}, headers = {}) {
+        return request.put(this.baseUrl + url, this.prepareParams(params, headers));
+    }
+    formBaseUrl(baseUrl) {
+        if (baseUrl.match(/\/$/)) {
+            baseUrl = baseUrl.slice(0, -1);
+        }
+        if (!baseUrl.match(/api$/i)) {
+            baseUrl += "/api";
+        }
+        return baseUrl;
+    }
+    prepareParams(params, customHeaders) {
+        if ('headers' in this.defaultRequestOptions && Object.keys(customHeaders).length > 0) {
+            // merge the header parameters
+            const _a = this.defaultRequestOptions, { headers } = _a, defaultOptions = __rest(_a, ["headers"]);
+            return Object.assign({}, defaultOptions, params, { headers: Object.assign({}, headers, customHeaders) });
+        }
+        if ('headers' in this.defaultRequestOptions) {
+            return Object.assign({}, this.defaultRequestOptions, params);
+        }
+        return Object.assign({}, this.defaultRequestOptions, params, { headers: Object.assign({}, customHeaders) });
+    }
+}
+exports.Youtrack = Youtrack;
+
+
+/***/ }),
 /* 377 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
@@ -16509,16 +19843,16 @@ return tryConvertToPromise;
 
 module.exports = Identity;
 
-var assert = __webpack_require__(489);
+var assert = __webpack_require__(757);
 var algs = __webpack_require__(98);
 var crypto = __webpack_require__(417);
 var Fingerprint = __webpack_require__(400);
 var Signature = __webpack_require__(575);
-var errs = __webpack_require__(753);
+var errs = __webpack_require__(570);
 var util = __webpack_require__(669);
 var utils = __webpack_require__(270);
 var asn1 = __webpack_require__(62);
-var Buffer = __webpack_require__(215).Buffer;
+var Buffer = __webpack_require__(481).Buffer;
 
 /*JSSTYLED*/
 var DNS_NAME_RE = /^([*]|[a-z0-9][a-z0-9\-]{0,62})(?:\.([*]|[a-z0-9][a-z0-9\-]{0,62}))*$/i;
@@ -16963,7 +20297,392 @@ module.exports = {
 
 /***/ }),
 /* 384 */,
-/* 385 */,
+/* 385 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, '__esModule', { value: true });
+
+function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
+
+var isPlainObject = _interopDefault(__webpack_require__(626));
+var universalUserAgent = __webpack_require__(796);
+
+function lowercaseKeys(object) {
+  if (!object) {
+    return {};
+  }
+
+  return Object.keys(object).reduce((newObj, key) => {
+    newObj[key.toLowerCase()] = object[key];
+    return newObj;
+  }, {});
+}
+
+function mergeDeep(defaults, options) {
+  const result = Object.assign({}, defaults);
+  Object.keys(options).forEach(key => {
+    if (isPlainObject(options[key])) {
+      if (!(key in defaults)) Object.assign(result, {
+        [key]: options[key]
+      });else result[key] = mergeDeep(defaults[key], options[key]);
+    } else {
+      Object.assign(result, {
+        [key]: options[key]
+      });
+    }
+  });
+  return result;
+}
+
+function merge(defaults, route, options) {
+  if (typeof route === "string") {
+    let [method, url] = route.split(" ");
+    options = Object.assign(url ? {
+      method,
+      url
+    } : {
+      url: method
+    }, options);
+  } else {
+    options = Object.assign({}, route);
+  } // lowercase header names before merging with defaults to avoid duplicates
+
+
+  options.headers = lowercaseKeys(options.headers);
+  const mergedOptions = mergeDeep(defaults || {}, options); // mediaType.previews arrays are merged, instead of overwritten
+
+  if (defaults && defaults.mediaType.previews.length) {
+    mergedOptions.mediaType.previews = defaults.mediaType.previews.filter(preview => !mergedOptions.mediaType.previews.includes(preview)).concat(mergedOptions.mediaType.previews);
+  }
+
+  mergedOptions.mediaType.previews = mergedOptions.mediaType.previews.map(preview => preview.replace(/-preview/, ""));
+  return mergedOptions;
+}
+
+function addQueryParameters(url, parameters) {
+  const separator = /\?/.test(url) ? "&" : "?";
+  const names = Object.keys(parameters);
+
+  if (names.length === 0) {
+    return url;
+  }
+
+  return url + separator + names.map(name => {
+    if (name === "q") {
+      return "q=" + parameters.q.split("+").map(encodeURIComponent).join("+");
+    }
+
+    return `${name}=${encodeURIComponent(parameters[name])}`;
+  }).join("&");
+}
+
+const urlVariableRegex = /\{[^}]+\}/g;
+
+function removeNonChars(variableName) {
+  return variableName.replace(/^\W+|\W+$/g, "").split(/,/);
+}
+
+function extractUrlVariableNames(url) {
+  const matches = url.match(urlVariableRegex);
+
+  if (!matches) {
+    return [];
+  }
+
+  return matches.map(removeNonChars).reduce((a, b) => a.concat(b), []);
+}
+
+function omit(object, keysToOmit) {
+  return Object.keys(object).filter(option => !keysToOmit.includes(option)).reduce((obj, key) => {
+    obj[key] = object[key];
+    return obj;
+  }, {});
+}
+
+// Based on https://github.com/bramstein/url-template, licensed under BSD
+// TODO: create separate package.
+//
+// Copyright (c) 2012-2014, Bram Stein
+// All rights reserved.
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+//  1. Redistributions of source code must retain the above copyright
+//     notice, this list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright
+//     notice, this list of conditions and the following disclaimer in the
+//     documentation and/or other materials provided with the distribution.
+//  3. The name of the author may not be used to endorse or promote products
+//     derived from this software without specific prior written permission.
+// THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR IMPLIED
+// WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+// EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+// INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+// BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+// OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+// NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+// EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+/* istanbul ignore file */
+function encodeReserved(str) {
+  return str.split(/(%[0-9A-Fa-f]{2})/g).map(function (part) {
+    if (!/%[0-9A-Fa-f]/.test(part)) {
+      part = encodeURI(part).replace(/%5B/g, "[").replace(/%5D/g, "]");
+    }
+
+    return part;
+  }).join("");
+}
+
+function encodeUnreserved(str) {
+  return encodeURIComponent(str).replace(/[!'()*]/g, function (c) {
+    return "%" + c.charCodeAt(0).toString(16).toUpperCase();
+  });
+}
+
+function encodeValue(operator, value, key) {
+  value = operator === "+" || operator === "#" ? encodeReserved(value) : encodeUnreserved(value);
+
+  if (key) {
+    return encodeUnreserved(key) + "=" + value;
+  } else {
+    return value;
+  }
+}
+
+function isDefined(value) {
+  return value !== undefined && value !== null;
+}
+
+function isKeyOperator(operator) {
+  return operator === ";" || operator === "&" || operator === "?";
+}
+
+function getValues(context, operator, key, modifier) {
+  var value = context[key],
+      result = [];
+
+  if (isDefined(value) && value !== "") {
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      value = value.toString();
+
+      if (modifier && modifier !== "*") {
+        value = value.substring(0, parseInt(modifier, 10));
+      }
+
+      result.push(encodeValue(operator, value, isKeyOperator(operator) ? key : ""));
+    } else {
+      if (modifier === "*") {
+        if (Array.isArray(value)) {
+          value.filter(isDefined).forEach(function (value) {
+            result.push(encodeValue(operator, value, isKeyOperator(operator) ? key : ""));
+          });
+        } else {
+          Object.keys(value).forEach(function (k) {
+            if (isDefined(value[k])) {
+              result.push(encodeValue(operator, value[k], k));
+            }
+          });
+        }
+      } else {
+        const tmp = [];
+
+        if (Array.isArray(value)) {
+          value.filter(isDefined).forEach(function (value) {
+            tmp.push(encodeValue(operator, value));
+          });
+        } else {
+          Object.keys(value).forEach(function (k) {
+            if (isDefined(value[k])) {
+              tmp.push(encodeUnreserved(k));
+              tmp.push(encodeValue(operator, value[k].toString()));
+            }
+          });
+        }
+
+        if (isKeyOperator(operator)) {
+          result.push(encodeUnreserved(key) + "=" + tmp.join(","));
+        } else if (tmp.length !== 0) {
+          result.push(tmp.join(","));
+        }
+      }
+    }
+  } else {
+    if (operator === ";") {
+      if (isDefined(value)) {
+        result.push(encodeUnreserved(key));
+      }
+    } else if (value === "" && (operator === "&" || operator === "?")) {
+      result.push(encodeUnreserved(key) + "=");
+    } else if (value === "") {
+      result.push("");
+    }
+  }
+
+  return result;
+}
+
+function parseUrl(template) {
+  return {
+    expand: expand.bind(null, template)
+  };
+}
+
+function expand(template, context) {
+  var operators = ["+", "#", ".", "/", ";", "?", "&"];
+  return template.replace(/\{([^\{\}]+)\}|([^\{\}]+)/g, function (_, expression, literal) {
+    if (expression) {
+      let operator = "";
+      const values = [];
+
+      if (operators.indexOf(expression.charAt(0)) !== -1) {
+        operator = expression.charAt(0);
+        expression = expression.substr(1);
+      }
+
+      expression.split(/,/g).forEach(function (variable) {
+        var tmp = /([^:\*]*)(?::(\d+)|(\*))?/.exec(variable);
+        values.push(getValues(context, operator, tmp[1], tmp[2] || tmp[3]));
+      });
+
+      if (operator && operator !== "+") {
+        var separator = ",";
+
+        if (operator === "?") {
+          separator = "&";
+        } else if (operator !== "#") {
+          separator = operator;
+        }
+
+        return (values.length !== 0 ? operator : "") + values.join(separator);
+      } else {
+        return values.join(",");
+      }
+    } else {
+      return encodeReserved(literal);
+    }
+  });
+}
+
+function parse(options) {
+  // https://fetch.spec.whatwg.org/#methods
+  let method = options.method.toUpperCase(); // replace :varname with {varname} to make it RFC 6570 compatible
+
+  let url = (options.url || "/").replace(/:([a-z]\w+)/g, "{+$1}");
+  let headers = Object.assign({}, options.headers);
+  let body;
+  let parameters = omit(options, ["method", "baseUrl", "url", "headers", "request", "mediaType"]); // extract variable names from URL to calculate remaining variables later
+
+  const urlVariableNames = extractUrlVariableNames(url);
+  url = parseUrl(url).expand(parameters);
+
+  if (!/^http/.test(url)) {
+    url = options.baseUrl + url;
+  }
+
+  const omittedParameters = Object.keys(options).filter(option => urlVariableNames.includes(option)).concat("baseUrl");
+  const remainingParameters = omit(parameters, omittedParameters);
+  const isBinaryRequset = /application\/octet-stream/i.test(headers.accept);
+
+  if (!isBinaryRequset) {
+    if (options.mediaType.format) {
+      // e.g. application/vnd.github.v3+json => application/vnd.github.v3.raw
+      headers.accept = headers.accept.split(/,/).map(preview => preview.replace(/application\/vnd(\.\w+)(\.v3)?(\.\w+)?(\+json)?$/, `application/vnd$1$2.${options.mediaType.format}`)).join(",");
+    }
+
+    if (options.mediaType.previews.length) {
+      const previewsFromAcceptHeader = headers.accept.match(/[\w-]+(?=-preview)/g) || [];
+      headers.accept = previewsFromAcceptHeader.concat(options.mediaType.previews).map(preview => {
+        const format = options.mediaType.format ? `.${options.mediaType.format}` : "+json";
+        return `application/vnd.github.${preview}-preview${format}`;
+      }).join(",");
+    }
+  } // for GET/HEAD requests, set URL query parameters from remaining parameters
+  // for PATCH/POST/PUT/DELETE requests, set request body from remaining parameters
+
+
+  if (["GET", "HEAD"].includes(method)) {
+    url = addQueryParameters(url, remainingParameters);
+  } else {
+    if ("data" in remainingParameters) {
+      body = remainingParameters.data;
+    } else {
+      if (Object.keys(remainingParameters).length) {
+        body = remainingParameters;
+      } else {
+        headers["content-length"] = 0;
+      }
+    }
+  } // default content-type for JSON if body is set
+
+
+  if (!headers["content-type"] && typeof body !== "undefined") {
+    headers["content-type"] = "application/json; charset=utf-8";
+  } // GitHub expects 'content-length: 0' header for PUT/PATCH requests without body.
+  // fetch does not allow to set `content-length` header, but we can set body to an empty string
+
+
+  if (["PATCH", "PUT"].includes(method) && typeof body === "undefined") {
+    body = "";
+  } // Only return body/request keys if present
+
+
+  return Object.assign({
+    method,
+    url,
+    headers
+  }, typeof body !== "undefined" ? {
+    body
+  } : null, options.request ? {
+    request: options.request
+  } : null);
+}
+
+function endpointWithDefaults(defaults, route, options) {
+  return parse(merge(defaults, route, options));
+}
+
+function withDefaults(oldDefaults, newDefaults) {
+  const DEFAULTS = merge(oldDefaults, newDefaults);
+  const endpoint = endpointWithDefaults.bind(null, DEFAULTS);
+  return Object.assign(endpoint, {
+    DEFAULTS,
+    defaults: withDefaults.bind(null, DEFAULTS),
+    merge: merge.bind(null, DEFAULTS),
+    parse
+  });
+}
+
+const VERSION = "5.5.2";
+
+const userAgent = `octokit-endpoint.js/${VERSION} ${universalUserAgent.getUserAgent()}`; // DEFAULTS has all properties set that EndpointOptions has, except url.
+// So we use RequestParameters and add method as additional required property.
+
+const DEFAULTS = {
+  method: "GET",
+  baseUrl: "https://api.github.com",
+  headers: {
+    accept: "application/vnd.github.v3+json",
+    "user-agent": userAgent
+  },
+  mediaType: {
+    format: "",
+    previews: []
+  }
+};
+
+const endpoint = withDefaults(null, DEFAULTS);
+
+exports.endpoint = endpoint;
+//# sourceMappingURL=index.js.map
+
+
+/***/ }),
 /* 386 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
@@ -16982,9 +20701,90 @@ module.exports = {
 
 
 /***/ }),
-/* 387 */,
+/* 387 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const issue_1 = __webpack_require__(524);
+const user_1 = __webpack_require__(406);
+class DurationValueImpl {
+    constructor() {
+        this.presentation = '';
+        this.id = '';
+        this.minutes = 0;
+    }
+}
+exports.DurationValueImpl = DurationValueImpl;
+class WorkItemTypeImpl {
+    constructor() {
+        this.id = '';
+        this.name = '';
+        this.autoAttached = false;
+    }
+}
+exports.WorkItemTypeImpl = WorkItemTypeImpl;
+class WorkItemImpl {
+    constructor() {
+        this.id = '';
+        this.created = 0;
+        this.date = 0;
+        this.duration = new DurationValueImpl();
+        this.issue = new issue_1.ReducedIssueImpl();
+        this.updated = 0;
+        this.author = new user_1.ReducedUserImpl();
+        this.creator = new user_1.ReducedUserImpl();
+        this.text = '';
+        this.textPreview = '';
+        this.type = new WorkItemTypeImpl();
+        this.usesMarkdown = false;
+    }
+}
+exports.WorkItemImpl = WorkItemImpl;
+
+
+/***/ }),
 /* 388 */,
-/* 389 */,
+/* 389 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+
+const fs = __webpack_require__(747);
+const shebangCommand = __webpack_require__(866);
+
+function readShebang(command) {
+    // Read the first 150 bytes from the file
+    const size = 150;
+    let buffer;
+
+    if (Buffer.alloc) {
+        // Node.js v4.5+ / v5.10+
+        buffer = Buffer.alloc(size);
+    } else {
+        // Old Node.js API
+        buffer = new Buffer(size);
+        buffer.fill(0); // zero-fill
+    }
+
+    let fd;
+
+    try {
+        fd = fs.openSync(command, 'r');
+        fs.readSync(fd, buffer, 0, size, 0);
+        fs.closeSync(fd);
+    } catch (e) { /* Empty */ }
+
+    // Attempt to extract shebang (null is returned if not a shebang)
+    return shebangCommand(buffer.toString());
+}
+
+module.exports = readShebang;
+
+
+/***/ }),
 /* 390 */,
 /* 391 */,
 /* 392 */,
@@ -17265,11 +21065,11 @@ module.exports = function (str, opts) {
 
 module.exports = Fingerprint;
 
-var assert = __webpack_require__(489);
-var Buffer = __webpack_require__(215).Buffer;
+var assert = __webpack_require__(757);
+var Buffer = __webpack_require__(481).Buffer;
 var algs = __webpack_require__(98);
 var crypto = __webpack_require__(417);
-var errs = __webpack_require__(753);
+var errs = __webpack_require__(570);
 var Key = __webpack_require__(852);
 var PrivateKey = __webpack_require__(502);
 var Certificate = __webpack_require__(752);
@@ -17485,12 +21285,116 @@ Fingerprint._oldVersionDetect = function (obj) {
 
 /***/ }),
 /* 401 */,
-/* 402 */,
+/* 402 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = Octokit;
+
+const { request } = __webpack_require__(753);
+const Hook = __webpack_require__(523);
+
+const parseClientOptions = __webpack_require__(294);
+
+function Octokit(plugins, options) {
+  options = options || {};
+  const hook = new Hook.Collection();
+  const log = Object.assign(
+    {
+      debug: () => {},
+      info: () => {},
+      warn: console.warn,
+      error: console.error
+    },
+    options && options.log
+  );
+  const api = {
+    hook,
+    log,
+    request: request.defaults(parseClientOptions(options, log, hook))
+  };
+
+  plugins.forEach(pluginFunction => pluginFunction(api, options));
+
+  return api;
+}
+
+
+/***/ }),
 /* 403 */,
-/* 404 */,
+/* 404 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const fieldStyle_1 = __webpack_require__(466);
+const projectCustomField_1 = __webpack_require__(640);
+class IssueCustomFieldValueImpl {
+    constructor() {
+        this.id = '';
+        this.name = '';
+        this.localizedName = '';
+        this.fullName = '';
+        this.login = '';
+        this.avatarUrl = '';
+        this.isResolved = false;
+        this.color = new fieldStyle_1.FieldStyleImpl();
+    }
+}
+exports.IssueCustomFieldValueImpl = IssueCustomFieldValueImpl;
+class IssueCustomFieldImpl {
+    constructor() {
+        this.id = '';
+        this.projectCustomField = new projectCustomField_1.ProjectCustomFieldImpl();
+        this.value = new IssueCustomFieldValueImpl();
+        this.$type = '';
+        this.name = '';
+    }
+}
+exports.IssueCustomFieldImpl = IssueCustomFieldImpl;
+
+
+/***/ }),
 /* 405 */,
-/* 406 */,
-/* 407 */,
+/* 406 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const issueTag_1 = __webpack_require__(164);
+class ReducedUserImpl {
+    constructor() {
+        this.email = '';
+        this.fullName = '';
+        this.login = '';
+        this.name = '';
+        this.id = '';
+    }
+}
+exports.ReducedUserImpl = ReducedUserImpl;
+class UserImpl extends ReducedUserImpl {
+    constructor() {
+        super(...arguments);
+        this.avatarUrl = '';
+        this.banned = false;
+        this.online = false;
+        this.guest = false;
+        this.jabberAccountName = '';
+        this.ringId = '';
+        this.tags = [new issueTag_1.ReducedIssueTagImpl()];
+    }
+}
+exports.UserImpl = UserImpl;
+
+
+/***/ }),
+/* 407 */
+/***/ (function(module) {
+
+module.exports = require("buffer");
+
+/***/ }),
 /* 408 */,
 /* 409 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
@@ -17593,7 +21497,12 @@ Promise.prototype.timeout = function (ms, message) {
 
 /***/ }),
 /* 410 */,
-/* 411 */,
+/* 411 */
+/***/ (function(module) {
+
+module.exports = {"$id":"query.json#","$schema":"http://json-schema.org/draft-06/schema#","type":"object","required":["name","value"],"properties":{"name":{"type":"string"},"value":{"type":"string"},"comment":{"type":"string"}}};
+
+/***/ }),
 /* 412 */,
 /* 413 */
 /***/ (function(module) {
@@ -17950,7 +21859,38 @@ exports.Har = Har
 module.exports = require("crypto");
 
 /***/ }),
-/* 418 */,
+/* 418 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const issue_1 = __webpack_require__(524);
+class IssueLinkTypeImpl {
+    constructor() {
+        this.id = '';
+        this.name = '';
+        this.sourceToTarget = '';
+        this.targetToSource = '';
+        this.directed = false;
+        this.aggregation = false;
+        this.readOnly = false;
+    }
+}
+exports.IssueLinkTypeImpl = IssueLinkTypeImpl;
+class IssueLinkImpl {
+    constructor() {
+        this.id = '';
+        this.direction = '';
+        this.linkType = new IssueLinkTypeImpl();
+        this.issue = new issue_1.ReducedIssueImpl();
+        this.issues = [new issue_1.ReducedIssueImpl()];
+    }
+}
+exports.IssueLinkImpl = IssueLinkImpl;
+
+
+/***/ }),
 /* 419 */,
 /* 420 */,
 /* 421 */,
@@ -18007,16 +21947,61 @@ function parallel(list, iterator, callback)
 /***/ }),
 /* 425 */,
 /* 426 */,
-/* 427 */,
+/* 427 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+// Older verions of Node.js might not have `util.getSystemErrorName()`.
+// In that case, fall back to a deprecated internal.
+const util = __webpack_require__(669);
+
+let uv;
+
+if (typeof util.getSystemErrorName === 'function') {
+	module.exports = util.getSystemErrorName;
+} else {
+	try {
+		uv = process.binding('uv');
+
+		if (typeof uv.errname !== 'function') {
+			throw new TypeError('uv.errname is not a function');
+		}
+	} catch (err) {
+		console.error('execa/lib/errname: unable to establish process.binding(\'uv\')', err);
+		uv = null;
+	}
+
+	module.exports = code => errname(uv, code);
+}
+
+// Used for testing the fallback behavior
+module.exports.__test__ = errname;
+
+function errname(uv, code) {
+	if (uv) {
+		return uv.errname(code);
+	}
+
+	if (!(code < 0)) {
+		throw new Error('err >= 0');
+	}
+
+	return `Unknown system error ${code}`;
+}
+
+
+
+/***/ }),
 /* 428 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
 // Copyright 2015 Joyent, Inc.
 
-var assert = __webpack_require__(489);
+var assert = __webpack_require__(757);
 var crypto = __webpack_require__(417);
 var sshpk = __webpack_require__(650);
-var utils = __webpack_require__(909);
+var utils = __webpack_require__(161);
 
 var HASH_ALGOS = utils.HASH_ALGOS;
 var PK_ALGOS = utils.PK_ALGOS;
@@ -18103,7 +22088,19 @@ module.exports = {
 
 /***/ }),
 /* 429 */,
-/* 430 */,
+/* 430 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = octokitValidate;
+
+const validate = __webpack_require__(348);
+
+function octokitValidate(octokit) {
+  octokit.hook.before("request", validate.bind(null, octokit));
+}
+
+
+/***/ }),
 /* 431 */
 /***/ (function(__unusedmodule, exports, __webpack_require__) {
 
@@ -18176,7 +22173,195 @@ function escape(s) {
 //# sourceMappingURL=command.js.map
 
 /***/ }),
-/* 432 */,
+/* 432 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+/*
+ * extsprintf.js: extended POSIX-style sprintf
+ */
+
+var mod_assert = __webpack_require__(357);
+var mod_util = __webpack_require__(669);
+
+/*
+ * Public interface
+ */
+exports.sprintf = jsSprintf;
+exports.printf = jsPrintf;
+exports.fprintf = jsFprintf;
+
+/*
+ * Stripped down version of s[n]printf(3c).  We make a best effort to throw an
+ * exception when given a format string we don't understand, rather than
+ * ignoring it, so that we won't break existing programs if/when we go implement
+ * the rest of this.
+ *
+ * This implementation currently supports specifying
+ *	- field alignment ('-' flag),
+ * 	- zero-pad ('0' flag)
+ *	- always show numeric sign ('+' flag),
+ *	- field width
+ *	- conversions for strings, decimal integers, and floats (numbers).
+ *	- argument size specifiers.  These are all accepted but ignored, since
+ *	  Javascript has no notion of the physical size of an argument.
+ *
+ * Everything else is currently unsupported, most notably precision, unsigned
+ * numbers, non-decimal numbers, and characters.
+ */
+function jsSprintf(fmt)
+{
+	var regex = [
+	    '([^%]*)',				/* normal text */
+	    '%',				/* start of format */
+	    '([\'\\-+ #0]*?)',			/* flags (optional) */
+	    '([1-9]\\d*)?',			/* width (optional) */
+	    '(\\.([1-9]\\d*))?',		/* precision (optional) */
+	    '[lhjztL]*?',			/* length mods (ignored) */
+	    '([diouxXfFeEgGaAcCsSp%jr])'	/* conversion */
+	].join('');
+
+	var re = new RegExp(regex);
+	var args = Array.prototype.slice.call(arguments, 1);
+	var flags, width, precision, conversion;
+	var left, pad, sign, arg, match;
+	var ret = '';
+	var argn = 1;
+
+	mod_assert.equal('string', typeof (fmt));
+
+	while ((match = re.exec(fmt)) !== null) {
+		ret += match[1];
+		fmt = fmt.substring(match[0].length);
+
+		flags = match[2] || '';
+		width = match[3] || 0;
+		precision = match[4] || '';
+		conversion = match[6];
+		left = false;
+		sign = false;
+		pad = ' ';
+
+		if (conversion == '%') {
+			ret += '%';
+			continue;
+		}
+
+		if (args.length === 0)
+			throw (new Error('too few args to sprintf'));
+
+		arg = args.shift();
+		argn++;
+
+		if (flags.match(/[\' #]/))
+			throw (new Error(
+			    'unsupported flags: ' + flags));
+
+		if (precision.length > 0)
+			throw (new Error(
+			    'non-zero precision not supported'));
+
+		if (flags.match(/-/))
+			left = true;
+
+		if (flags.match(/0/))
+			pad = '0';
+
+		if (flags.match(/\+/))
+			sign = true;
+
+		switch (conversion) {
+		case 's':
+			if (arg === undefined || arg === null)
+				throw (new Error('argument ' + argn +
+				    ': attempted to print undefined or null ' +
+				    'as a string'));
+			ret += doPad(pad, width, left, arg.toString());
+			break;
+
+		case 'd':
+			arg = Math.floor(arg);
+			/*jsl:fallthru*/
+		case 'f':
+			sign = sign && arg > 0 ? '+' : '';
+			ret += sign + doPad(pad, width, left,
+			    arg.toString());
+			break;
+
+		case 'x':
+			ret += doPad(pad, width, left, arg.toString(16));
+			break;
+
+		case 'j': /* non-standard */
+			if (width === 0)
+				width = 10;
+			ret += mod_util.inspect(arg, false, width);
+			break;
+
+		case 'r': /* non-standard */
+			ret += dumpException(arg);
+			break;
+
+		default:
+			throw (new Error('unsupported conversion: ' +
+			    conversion));
+		}
+	}
+
+	ret += fmt;
+	return (ret);
+}
+
+function jsPrintf() {
+	var args = Array.prototype.slice.call(arguments);
+	args.unshift(process.stdout);
+	jsFprintf.apply(null, args);
+}
+
+function jsFprintf(stream) {
+	var args = Array.prototype.slice.call(arguments, 1);
+	return (stream.write(jsSprintf.apply(this, args)));
+}
+
+function doPad(chr, width, left, str)
+{
+	var ret = str;
+
+	while (ret.length < width) {
+		if (left)
+			ret += chr;
+		else
+			ret = chr + ret;
+	}
+
+	return (ret);
+}
+
+/*
+ * This function dumps long stack traces for exceptions having a cause() method.
+ * See node-verror for an example.
+ */
+function dumpException(ex)
+{
+	var ret;
+
+	if (!(ex instanceof Error))
+		throw (new Error(jsSprintf('invalid type for %%r: %j', ex)));
+
+	/* Note that V8 prepends "ex.stack" with ex.toString(). */
+	ret = 'EXCEPTION: ' + ex.constructor.name + ': ' + ex.stack;
+
+	if (ex.cause && typeof (ex.cause) === 'function') {
+		var cex = ex.cause();
+		if (cex) {
+			ret += '\nCaused by: ' + dumpException(cex);
+		}
+	}
+
+	return (ret);
+}
+
+
+/***/ }),
 /* 433 */,
 /* 434 */,
 /* 435 */,
@@ -18209,7 +22394,37 @@ module.exports = bluebird;
 /* 445 */,
 /* 446 */,
 /* 447 */,
-/* 448 */,
+/* 448 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const project_1 = __webpack_require__(527);
+const user_1 = __webpack_require__(406);
+const sprint_1 = __webpack_require__(133);
+class ReducedAgileImpl {
+    constructor() {
+        this.id = '';
+        this.name = '';
+        this.owner = new user_1.ReducedUserImpl();
+        this.projects = [new project_1.ReducedProjectImpl()];
+        this.sprints = [new sprint_1.ReducedSprintImpl()];
+        this.currentSprint = new sprint_1.ReducedSprintImpl();
+    }
+}
+exports.ReducedAgileImpl = ReducedAgileImpl;
+class AgileImpl extends ReducedAgileImpl {
+    constructor() {
+        super(...arguments);
+        this.orphansAtTheTop = false;
+        this.hideOrphansSwimlane = false;
+    }
+}
+exports.AgileImpl = AgileImpl;
+
+
+/***/ }),
 /* 449 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
@@ -18222,9 +22437,9 @@ module.exports = {
 	writePkcs1: writePkcs1
 };
 
-var assert = __webpack_require__(489);
+var assert = __webpack_require__(757);
 var asn1 = __webpack_require__(62);
-var Buffer = __webpack_require__(215).Buffer;
+var Buffer = __webpack_require__(481).Buffer;
 var algs = __webpack_require__(98);
 var utils = __webpack_require__(270);
 
@@ -18592,8 +22807,1743 @@ function writePkcs1EdDSAPublic(der, key) {
 /* 450 */,
 /* 451 */,
 /* 452 */,
-/* 453 */,
-/* 454 */,
+/* 453 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+var once = __webpack_require__(969)
+var eos = __webpack_require__(9)
+var fs = __webpack_require__(747) // we only need fs to get the ReadStream and WriteStream prototypes
+
+var noop = function () {}
+var ancient = /^v?\.0/.test(process.version)
+
+var isFn = function (fn) {
+  return typeof fn === 'function'
+}
+
+var isFS = function (stream) {
+  if (!ancient) return false // newer node version do not need to care about fs is a special way
+  if (!fs) return false // browser
+  return (stream instanceof (fs.ReadStream || noop) || stream instanceof (fs.WriteStream || noop)) && isFn(stream.close)
+}
+
+var isRequest = function (stream) {
+  return stream.setHeader && isFn(stream.abort)
+}
+
+var destroyer = function (stream, reading, writing, callback) {
+  callback = once(callback)
+
+  var closed = false
+  stream.on('close', function () {
+    closed = true
+  })
+
+  eos(stream, {readable: reading, writable: writing}, function (err) {
+    if (err) return callback(err)
+    closed = true
+    callback()
+  })
+
+  var destroyed = false
+  return function (err) {
+    if (closed) return
+    if (destroyed) return
+    destroyed = true
+
+    if (isFS(stream)) return stream.close(noop) // use close for fs streams to avoid fd leaks
+    if (isRequest(stream)) return stream.abort() // request.destroy just do .end - .abort is what we want
+
+    if (isFn(stream.destroy)) return stream.destroy()
+
+    callback(err || new Error('stream was destroyed'))
+  }
+}
+
+var call = function (fn) {
+  fn()
+}
+
+var pipe = function (from, to) {
+  return from.pipe(to)
+}
+
+var pump = function () {
+  var streams = Array.prototype.slice.call(arguments)
+  var callback = isFn(streams[streams.length - 1] || noop) && streams.pop() || noop
+
+  if (Array.isArray(streams[0])) streams = streams[0]
+  if (streams.length < 2) throw new Error('pump requires two streams per minimum')
+
+  var error
+  var destroys = streams.map(function (stream, i) {
+    var reading = i < streams.length - 1
+    var writing = i > 0
+    return destroyer(stream, reading, writing, function (err) {
+      if (!error) error = err
+      if (err) destroys.forEach(call)
+      if (reading) return
+      destroys.forEach(call)
+      callback(error)
+    })
+  })
+
+  return streams.reduce(pipe)
+}
+
+module.exports = pump
+
+
+/***/ }),
+/* 454 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, '__esModule', { value: true });
+
+function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
+
+var Stream = _interopDefault(__webpack_require__(413));
+var http = _interopDefault(__webpack_require__(605));
+var Url = _interopDefault(__webpack_require__(835));
+var https = _interopDefault(__webpack_require__(211));
+var zlib = _interopDefault(__webpack_require__(761));
+
+// Based on https://github.com/tmpvar/jsdom/blob/aa85b2abf07766ff7bf5c1f6daafb3726f2f2db5/lib/jsdom/living/blob.js
+
+// fix for "Readable" isn't a named export issue
+const Readable = Stream.Readable;
+
+const BUFFER = Symbol('buffer');
+const TYPE = Symbol('type');
+
+class Blob {
+	constructor() {
+		this[TYPE] = '';
+
+		const blobParts = arguments[0];
+		const options = arguments[1];
+
+		const buffers = [];
+		let size = 0;
+
+		if (blobParts) {
+			const a = blobParts;
+			const length = Number(a.length);
+			for (let i = 0; i < length; i++) {
+				const element = a[i];
+				let buffer;
+				if (element instanceof Buffer) {
+					buffer = element;
+				} else if (ArrayBuffer.isView(element)) {
+					buffer = Buffer.from(element.buffer, element.byteOffset, element.byteLength);
+				} else if (element instanceof ArrayBuffer) {
+					buffer = Buffer.from(element);
+				} else if (element instanceof Blob) {
+					buffer = element[BUFFER];
+				} else {
+					buffer = Buffer.from(typeof element === 'string' ? element : String(element));
+				}
+				size += buffer.length;
+				buffers.push(buffer);
+			}
+		}
+
+		this[BUFFER] = Buffer.concat(buffers);
+
+		let type = options && options.type !== undefined && String(options.type).toLowerCase();
+		if (type && !/[^\u0020-\u007E]/.test(type)) {
+			this[TYPE] = type;
+		}
+	}
+	get size() {
+		return this[BUFFER].length;
+	}
+	get type() {
+		return this[TYPE];
+	}
+	text() {
+		return Promise.resolve(this[BUFFER].toString());
+	}
+	arrayBuffer() {
+		const buf = this[BUFFER];
+		const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+		return Promise.resolve(ab);
+	}
+	stream() {
+		const readable = new Readable();
+		readable._read = function () {};
+		readable.push(this[BUFFER]);
+		readable.push(null);
+		return readable;
+	}
+	toString() {
+		return '[object Blob]';
+	}
+	slice() {
+		const size = this.size;
+
+		const start = arguments[0];
+		const end = arguments[1];
+		let relativeStart, relativeEnd;
+		if (start === undefined) {
+			relativeStart = 0;
+		} else if (start < 0) {
+			relativeStart = Math.max(size + start, 0);
+		} else {
+			relativeStart = Math.min(start, size);
+		}
+		if (end === undefined) {
+			relativeEnd = size;
+		} else if (end < 0) {
+			relativeEnd = Math.max(size + end, 0);
+		} else {
+			relativeEnd = Math.min(end, size);
+		}
+		const span = Math.max(relativeEnd - relativeStart, 0);
+
+		const buffer = this[BUFFER];
+		const slicedBuffer = buffer.slice(relativeStart, relativeStart + span);
+		const blob = new Blob([], { type: arguments[2] });
+		blob[BUFFER] = slicedBuffer;
+		return blob;
+	}
+}
+
+Object.defineProperties(Blob.prototype, {
+	size: { enumerable: true },
+	type: { enumerable: true },
+	slice: { enumerable: true }
+});
+
+Object.defineProperty(Blob.prototype, Symbol.toStringTag, {
+	value: 'Blob',
+	writable: false,
+	enumerable: false,
+	configurable: true
+});
+
+/**
+ * fetch-error.js
+ *
+ * FetchError interface for operational errors
+ */
+
+/**
+ * Create FetchError instance
+ *
+ * @param   String      message      Error message for human
+ * @param   String      type         Error type for machine
+ * @param   String      systemError  For Node.js system error
+ * @return  FetchError
+ */
+function FetchError(message, type, systemError) {
+  Error.call(this, message);
+
+  this.message = message;
+  this.type = type;
+
+  // when err.type is `system`, err.code contains system error code
+  if (systemError) {
+    this.code = this.errno = systemError.code;
+  }
+
+  // hide custom error implementation details from end-users
+  Error.captureStackTrace(this, this.constructor);
+}
+
+FetchError.prototype = Object.create(Error.prototype);
+FetchError.prototype.constructor = FetchError;
+FetchError.prototype.name = 'FetchError';
+
+let convert;
+try {
+	convert = __webpack_require__(18).convert;
+} catch (e) {}
+
+const INTERNALS = Symbol('Body internals');
+
+// fix an issue where "PassThrough" isn't a named export for node <10
+const PassThrough = Stream.PassThrough;
+
+/**
+ * Body mixin
+ *
+ * Ref: https://fetch.spec.whatwg.org/#body
+ *
+ * @param   Stream  body  Readable stream
+ * @param   Object  opts  Response options
+ * @return  Void
+ */
+function Body(body) {
+	var _this = this;
+
+	var _ref = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
+	    _ref$size = _ref.size;
+
+	let size = _ref$size === undefined ? 0 : _ref$size;
+	var _ref$timeout = _ref.timeout;
+	let timeout = _ref$timeout === undefined ? 0 : _ref$timeout;
+
+	if (body == null) {
+		// body is undefined or null
+		body = null;
+	} else if (isURLSearchParams(body)) {
+		// body is a URLSearchParams
+		body = Buffer.from(body.toString());
+	} else if (isBlob(body)) ; else if (Buffer.isBuffer(body)) ; else if (Object.prototype.toString.call(body) === '[object ArrayBuffer]') {
+		// body is ArrayBuffer
+		body = Buffer.from(body);
+	} else if (ArrayBuffer.isView(body)) {
+		// body is ArrayBufferView
+		body = Buffer.from(body.buffer, body.byteOffset, body.byteLength);
+	} else if (body instanceof Stream) ; else {
+		// none of the above
+		// coerce to string then buffer
+		body = Buffer.from(String(body));
+	}
+	this[INTERNALS] = {
+		body,
+		disturbed: false,
+		error: null
+	};
+	this.size = size;
+	this.timeout = timeout;
+
+	if (body instanceof Stream) {
+		body.on('error', function (err) {
+			const error = err.name === 'AbortError' ? err : new FetchError(`Invalid response body while trying to fetch ${_this.url}: ${err.message}`, 'system', err);
+			_this[INTERNALS].error = error;
+		});
+	}
+}
+
+Body.prototype = {
+	get body() {
+		return this[INTERNALS].body;
+	},
+
+	get bodyUsed() {
+		return this[INTERNALS].disturbed;
+	},
+
+	/**
+  * Decode response as ArrayBuffer
+  *
+  * @return  Promise
+  */
+	arrayBuffer() {
+		return consumeBody.call(this).then(function (buf) {
+			return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+		});
+	},
+
+	/**
+  * Return raw response as Blob
+  *
+  * @return Promise
+  */
+	blob() {
+		let ct = this.headers && this.headers.get('content-type') || '';
+		return consumeBody.call(this).then(function (buf) {
+			return Object.assign(
+			// Prevent copying
+			new Blob([], {
+				type: ct.toLowerCase()
+			}), {
+				[BUFFER]: buf
+			});
+		});
+	},
+
+	/**
+  * Decode response as json
+  *
+  * @return  Promise
+  */
+	json() {
+		var _this2 = this;
+
+		return consumeBody.call(this).then(function (buffer) {
+			try {
+				return JSON.parse(buffer.toString());
+			} catch (err) {
+				return Body.Promise.reject(new FetchError(`invalid json response body at ${_this2.url} reason: ${err.message}`, 'invalid-json'));
+			}
+		});
+	},
+
+	/**
+  * Decode response as text
+  *
+  * @return  Promise
+  */
+	text() {
+		return consumeBody.call(this).then(function (buffer) {
+			return buffer.toString();
+		});
+	},
+
+	/**
+  * Decode response as buffer (non-spec api)
+  *
+  * @return  Promise
+  */
+	buffer() {
+		return consumeBody.call(this);
+	},
+
+	/**
+  * Decode response as text, while automatically detecting the encoding and
+  * trying to decode to UTF-8 (non-spec api)
+  *
+  * @return  Promise
+  */
+	textConverted() {
+		var _this3 = this;
+
+		return consumeBody.call(this).then(function (buffer) {
+			return convertBody(buffer, _this3.headers);
+		});
+	}
+};
+
+// In browsers, all properties are enumerable.
+Object.defineProperties(Body.prototype, {
+	body: { enumerable: true },
+	bodyUsed: { enumerable: true },
+	arrayBuffer: { enumerable: true },
+	blob: { enumerable: true },
+	json: { enumerable: true },
+	text: { enumerable: true }
+});
+
+Body.mixIn = function (proto) {
+	for (const name of Object.getOwnPropertyNames(Body.prototype)) {
+		// istanbul ignore else: future proof
+		if (!(name in proto)) {
+			const desc = Object.getOwnPropertyDescriptor(Body.prototype, name);
+			Object.defineProperty(proto, name, desc);
+		}
+	}
+};
+
+/**
+ * Consume and convert an entire Body to a Buffer.
+ *
+ * Ref: https://fetch.spec.whatwg.org/#concept-body-consume-body
+ *
+ * @return  Promise
+ */
+function consumeBody() {
+	var _this4 = this;
+
+	if (this[INTERNALS].disturbed) {
+		return Body.Promise.reject(new TypeError(`body used already for: ${this.url}`));
+	}
+
+	this[INTERNALS].disturbed = true;
+
+	if (this[INTERNALS].error) {
+		return Body.Promise.reject(this[INTERNALS].error);
+	}
+
+	let body = this.body;
+
+	// body is null
+	if (body === null) {
+		return Body.Promise.resolve(Buffer.alloc(0));
+	}
+
+	// body is blob
+	if (isBlob(body)) {
+		body = body.stream();
+	}
+
+	// body is buffer
+	if (Buffer.isBuffer(body)) {
+		return Body.Promise.resolve(body);
+	}
+
+	// istanbul ignore if: should never happen
+	if (!(body instanceof Stream)) {
+		return Body.Promise.resolve(Buffer.alloc(0));
+	}
+
+	// body is stream
+	// get ready to actually consume the body
+	let accum = [];
+	let accumBytes = 0;
+	let abort = false;
+
+	return new Body.Promise(function (resolve, reject) {
+		let resTimeout;
+
+		// allow timeout on slow response body
+		if (_this4.timeout) {
+			resTimeout = setTimeout(function () {
+				abort = true;
+				reject(new FetchError(`Response timeout while trying to fetch ${_this4.url} (over ${_this4.timeout}ms)`, 'body-timeout'));
+			}, _this4.timeout);
+		}
+
+		// handle stream errors
+		body.on('error', function (err) {
+			if (err.name === 'AbortError') {
+				// if the request was aborted, reject with this Error
+				abort = true;
+				reject(err);
+			} else {
+				// other errors, such as incorrect content-encoding
+				reject(new FetchError(`Invalid response body while trying to fetch ${_this4.url}: ${err.message}`, 'system', err));
+			}
+		});
+
+		body.on('data', function (chunk) {
+			if (abort || chunk === null) {
+				return;
+			}
+
+			if (_this4.size && accumBytes + chunk.length > _this4.size) {
+				abort = true;
+				reject(new FetchError(`content size at ${_this4.url} over limit: ${_this4.size}`, 'max-size'));
+				return;
+			}
+
+			accumBytes += chunk.length;
+			accum.push(chunk);
+		});
+
+		body.on('end', function () {
+			if (abort) {
+				return;
+			}
+
+			clearTimeout(resTimeout);
+
+			try {
+				resolve(Buffer.concat(accum, accumBytes));
+			} catch (err) {
+				// handle streams that have accumulated too much data (issue #414)
+				reject(new FetchError(`Could not create Buffer from response body for ${_this4.url}: ${err.message}`, 'system', err));
+			}
+		});
+	});
+}
+
+/**
+ * Detect buffer encoding and convert to target encoding
+ * ref: http://www.w3.org/TR/2011/WD-html5-20110113/parsing.html#determining-the-character-encoding
+ *
+ * @param   Buffer  buffer    Incoming buffer
+ * @param   String  encoding  Target encoding
+ * @return  String
+ */
+function convertBody(buffer, headers) {
+	if (typeof convert !== 'function') {
+		throw new Error('The package `encoding` must be installed to use the textConverted() function');
+	}
+
+	const ct = headers.get('content-type');
+	let charset = 'utf-8';
+	let res, str;
+
+	// header
+	if (ct) {
+		res = /charset=([^;]*)/i.exec(ct);
+	}
+
+	// no charset in content type, peek at response body for at most 1024 bytes
+	str = buffer.slice(0, 1024).toString();
+
+	// html5
+	if (!res && str) {
+		res = /<meta.+?charset=(['"])(.+?)\1/i.exec(str);
+	}
+
+	// html4
+	if (!res && str) {
+		res = /<meta[\s]+?http-equiv=(['"])content-type\1[\s]+?content=(['"])(.+?)\2/i.exec(str);
+
+		if (res) {
+			res = /charset=(.*)/i.exec(res.pop());
+		}
+	}
+
+	// xml
+	if (!res && str) {
+		res = /<\?xml.+?encoding=(['"])(.+?)\1/i.exec(str);
+	}
+
+	// found charset
+	if (res) {
+		charset = res.pop();
+
+		// prevent decode issues when sites use incorrect encoding
+		// ref: https://hsivonen.fi/encoding-menu/
+		if (charset === 'gb2312' || charset === 'gbk') {
+			charset = 'gb18030';
+		}
+	}
+
+	// turn raw buffers into a single utf-8 buffer
+	return convert(buffer, 'UTF-8', charset).toString();
+}
+
+/**
+ * Detect a URLSearchParams object
+ * ref: https://github.com/bitinn/node-fetch/issues/296#issuecomment-307598143
+ *
+ * @param   Object  obj     Object to detect by type or brand
+ * @return  String
+ */
+function isURLSearchParams(obj) {
+	// Duck-typing as a necessary condition.
+	if (typeof obj !== 'object' || typeof obj.append !== 'function' || typeof obj.delete !== 'function' || typeof obj.get !== 'function' || typeof obj.getAll !== 'function' || typeof obj.has !== 'function' || typeof obj.set !== 'function') {
+		return false;
+	}
+
+	// Brand-checking and more duck-typing as optional condition.
+	return obj.constructor.name === 'URLSearchParams' || Object.prototype.toString.call(obj) === '[object URLSearchParams]' || typeof obj.sort === 'function';
+}
+
+/**
+ * Check if `obj` is a W3C `Blob` object (which `File` inherits from)
+ * @param  {*} obj
+ * @return {boolean}
+ */
+function isBlob(obj) {
+	return typeof obj === 'object' && typeof obj.arrayBuffer === 'function' && typeof obj.type === 'string' && typeof obj.stream === 'function' && typeof obj.constructor === 'function' && typeof obj.constructor.name === 'string' && /^(Blob|File)$/.test(obj.constructor.name) && /^(Blob|File)$/.test(obj[Symbol.toStringTag]);
+}
+
+/**
+ * Clone body given Res/Req instance
+ *
+ * @param   Mixed  instance  Response or Request instance
+ * @return  Mixed
+ */
+function clone(instance) {
+	let p1, p2;
+	let body = instance.body;
+
+	// don't allow cloning a used body
+	if (instance.bodyUsed) {
+		throw new Error('cannot clone body after it is used');
+	}
+
+	// check that body is a stream and not form-data object
+	// note: we can't clone the form-data object without having it as a dependency
+	if (body instanceof Stream && typeof body.getBoundary !== 'function') {
+		// tee instance body
+		p1 = new PassThrough();
+		p2 = new PassThrough();
+		body.pipe(p1);
+		body.pipe(p2);
+		// set instance body to teed body and return the other teed body
+		instance[INTERNALS].body = p1;
+		body = p2;
+	}
+
+	return body;
+}
+
+/**
+ * Performs the operation "extract a `Content-Type` value from |object|" as
+ * specified in the specification:
+ * https://fetch.spec.whatwg.org/#concept-bodyinit-extract
+ *
+ * This function assumes that instance.body is present.
+ *
+ * @param   Mixed  instance  Any options.body input
+ */
+function extractContentType(body) {
+	if (body === null) {
+		// body is null
+		return null;
+	} else if (typeof body === 'string') {
+		// body is string
+		return 'text/plain;charset=UTF-8';
+	} else if (isURLSearchParams(body)) {
+		// body is a URLSearchParams
+		return 'application/x-www-form-urlencoded;charset=UTF-8';
+	} else if (isBlob(body)) {
+		// body is blob
+		return body.type || null;
+	} else if (Buffer.isBuffer(body)) {
+		// body is buffer
+		return null;
+	} else if (Object.prototype.toString.call(body) === '[object ArrayBuffer]') {
+		// body is ArrayBuffer
+		return null;
+	} else if (ArrayBuffer.isView(body)) {
+		// body is ArrayBufferView
+		return null;
+	} else if (typeof body.getBoundary === 'function') {
+		// detect form data input from form-data module
+		return `multipart/form-data;boundary=${body.getBoundary()}`;
+	} else if (body instanceof Stream) {
+		// body is stream
+		// can't really do much about this
+		return null;
+	} else {
+		// Body constructor defaults other things to string
+		return 'text/plain;charset=UTF-8';
+	}
+}
+
+/**
+ * The Fetch Standard treats this as if "total bytes" is a property on the body.
+ * For us, we have to explicitly get it with a function.
+ *
+ * ref: https://fetch.spec.whatwg.org/#concept-body-total-bytes
+ *
+ * @param   Body    instance   Instance of Body
+ * @return  Number?            Number of bytes, or null if not possible
+ */
+function getTotalBytes(instance) {
+	const body = instance.body;
+
+
+	if (body === null) {
+		// body is null
+		return 0;
+	} else if (isBlob(body)) {
+		return body.size;
+	} else if (Buffer.isBuffer(body)) {
+		// body is buffer
+		return body.length;
+	} else if (body && typeof body.getLengthSync === 'function') {
+		// detect form data input from form-data module
+		if (body._lengthRetrievers && body._lengthRetrievers.length == 0 || // 1.x
+		body.hasKnownLength && body.hasKnownLength()) {
+			// 2.x
+			return body.getLengthSync();
+		}
+		return null;
+	} else {
+		// body is stream
+		return null;
+	}
+}
+
+/**
+ * Write a Body to a Node.js WritableStream (e.g. http.Request) object.
+ *
+ * @param   Body    instance   Instance of Body
+ * @return  Void
+ */
+function writeToStream(dest, instance) {
+	const body = instance.body;
+
+
+	if (body === null) {
+		// body is null
+		dest.end();
+	} else if (isBlob(body)) {
+		body.stream().pipe(dest);
+	} else if (Buffer.isBuffer(body)) {
+		// body is buffer
+		dest.write(body);
+		dest.end();
+	} else {
+		// body is stream
+		body.pipe(dest);
+	}
+}
+
+// expose Promise
+Body.Promise = global.Promise;
+
+/**
+ * headers.js
+ *
+ * Headers class offers convenient helpers
+ */
+
+const invalidTokenRegex = /[^\^_`a-zA-Z\-0-9!#$%&'*+.|~]/;
+const invalidHeaderCharRegex = /[^\t\x20-\x7e\x80-\xff]/;
+
+function validateName(name) {
+	name = `${name}`;
+	if (invalidTokenRegex.test(name) || name === '') {
+		throw new TypeError(`${name} is not a legal HTTP header name`);
+	}
+}
+
+function validateValue(value) {
+	value = `${value}`;
+	if (invalidHeaderCharRegex.test(value)) {
+		throw new TypeError(`${value} is not a legal HTTP header value`);
+	}
+}
+
+/**
+ * Find the key in the map object given a header name.
+ *
+ * Returns undefined if not found.
+ *
+ * @param   String  name  Header name
+ * @return  String|Undefined
+ */
+function find(map, name) {
+	name = name.toLowerCase();
+	for (const key in map) {
+		if (key.toLowerCase() === name) {
+			return key;
+		}
+	}
+	return undefined;
+}
+
+const MAP = Symbol('map');
+class Headers {
+	/**
+  * Headers class
+  *
+  * @param   Object  headers  Response headers
+  * @return  Void
+  */
+	constructor() {
+		let init = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : undefined;
+
+		this[MAP] = Object.create(null);
+
+		if (init instanceof Headers) {
+			const rawHeaders = init.raw();
+			const headerNames = Object.keys(rawHeaders);
+
+			for (const headerName of headerNames) {
+				for (const value of rawHeaders[headerName]) {
+					this.append(headerName, value);
+				}
+			}
+
+			return;
+		}
+
+		// We don't worry about converting prop to ByteString here as append()
+		// will handle it.
+		if (init == null) ; else if (typeof init === 'object') {
+			const method = init[Symbol.iterator];
+			if (method != null) {
+				if (typeof method !== 'function') {
+					throw new TypeError('Header pairs must be iterable');
+				}
+
+				// sequence<sequence<ByteString>>
+				// Note: per spec we have to first exhaust the lists then process them
+				const pairs = [];
+				for (const pair of init) {
+					if (typeof pair !== 'object' || typeof pair[Symbol.iterator] !== 'function') {
+						throw new TypeError('Each header pair must be iterable');
+					}
+					pairs.push(Array.from(pair));
+				}
+
+				for (const pair of pairs) {
+					if (pair.length !== 2) {
+						throw new TypeError('Each header pair must be a name/value tuple');
+					}
+					this.append(pair[0], pair[1]);
+				}
+			} else {
+				// record<ByteString, ByteString>
+				for (const key of Object.keys(init)) {
+					const value = init[key];
+					this.append(key, value);
+				}
+			}
+		} else {
+			throw new TypeError('Provided initializer must be an object');
+		}
+	}
+
+	/**
+  * Return combined header value given name
+  *
+  * @param   String  name  Header name
+  * @return  Mixed
+  */
+	get(name) {
+		name = `${name}`;
+		validateName(name);
+		const key = find(this[MAP], name);
+		if (key === undefined) {
+			return null;
+		}
+
+		return this[MAP][key].join(', ');
+	}
+
+	/**
+  * Iterate over all headers
+  *
+  * @param   Function  callback  Executed for each item with parameters (value, name, thisArg)
+  * @param   Boolean   thisArg   `this` context for callback function
+  * @return  Void
+  */
+	forEach(callback) {
+		let thisArg = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : undefined;
+
+		let pairs = getHeaders(this);
+		let i = 0;
+		while (i < pairs.length) {
+			var _pairs$i = pairs[i];
+			const name = _pairs$i[0],
+			      value = _pairs$i[1];
+
+			callback.call(thisArg, value, name, this);
+			pairs = getHeaders(this);
+			i++;
+		}
+	}
+
+	/**
+  * Overwrite header values given name
+  *
+  * @param   String  name   Header name
+  * @param   String  value  Header value
+  * @return  Void
+  */
+	set(name, value) {
+		name = `${name}`;
+		value = `${value}`;
+		validateName(name);
+		validateValue(value);
+		const key = find(this[MAP], name);
+		this[MAP][key !== undefined ? key : name] = [value];
+	}
+
+	/**
+  * Append a value onto existing header
+  *
+  * @param   String  name   Header name
+  * @param   String  value  Header value
+  * @return  Void
+  */
+	append(name, value) {
+		name = `${name}`;
+		value = `${value}`;
+		validateName(name);
+		validateValue(value);
+		const key = find(this[MAP], name);
+		if (key !== undefined) {
+			this[MAP][key].push(value);
+		} else {
+			this[MAP][name] = [value];
+		}
+	}
+
+	/**
+  * Check for header name existence
+  *
+  * @param   String   name  Header name
+  * @return  Boolean
+  */
+	has(name) {
+		name = `${name}`;
+		validateName(name);
+		return find(this[MAP], name) !== undefined;
+	}
+
+	/**
+  * Delete all header values given name
+  *
+  * @param   String  name  Header name
+  * @return  Void
+  */
+	delete(name) {
+		name = `${name}`;
+		validateName(name);
+		const key = find(this[MAP], name);
+		if (key !== undefined) {
+			delete this[MAP][key];
+		}
+	}
+
+	/**
+  * Return raw headers (non-spec api)
+  *
+  * @return  Object
+  */
+	raw() {
+		return this[MAP];
+	}
+
+	/**
+  * Get an iterator on keys.
+  *
+  * @return  Iterator
+  */
+	keys() {
+		return createHeadersIterator(this, 'key');
+	}
+
+	/**
+  * Get an iterator on values.
+  *
+  * @return  Iterator
+  */
+	values() {
+		return createHeadersIterator(this, 'value');
+	}
+
+	/**
+  * Get an iterator on entries.
+  *
+  * This is the default iterator of the Headers object.
+  *
+  * @return  Iterator
+  */
+	[Symbol.iterator]() {
+		return createHeadersIterator(this, 'key+value');
+	}
+}
+Headers.prototype.entries = Headers.prototype[Symbol.iterator];
+
+Object.defineProperty(Headers.prototype, Symbol.toStringTag, {
+	value: 'Headers',
+	writable: false,
+	enumerable: false,
+	configurable: true
+});
+
+Object.defineProperties(Headers.prototype, {
+	get: { enumerable: true },
+	forEach: { enumerable: true },
+	set: { enumerable: true },
+	append: { enumerable: true },
+	has: { enumerable: true },
+	delete: { enumerable: true },
+	keys: { enumerable: true },
+	values: { enumerable: true },
+	entries: { enumerable: true }
+});
+
+function getHeaders(headers) {
+	let kind = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 'key+value';
+
+	const keys = Object.keys(headers[MAP]).sort();
+	return keys.map(kind === 'key' ? function (k) {
+		return k.toLowerCase();
+	} : kind === 'value' ? function (k) {
+		return headers[MAP][k].join(', ');
+	} : function (k) {
+		return [k.toLowerCase(), headers[MAP][k].join(', ')];
+	});
+}
+
+const INTERNAL = Symbol('internal');
+
+function createHeadersIterator(target, kind) {
+	const iterator = Object.create(HeadersIteratorPrototype);
+	iterator[INTERNAL] = {
+		target,
+		kind,
+		index: 0
+	};
+	return iterator;
+}
+
+const HeadersIteratorPrototype = Object.setPrototypeOf({
+	next() {
+		// istanbul ignore if
+		if (!this || Object.getPrototypeOf(this) !== HeadersIteratorPrototype) {
+			throw new TypeError('Value of `this` is not a HeadersIterator');
+		}
+
+		var _INTERNAL = this[INTERNAL];
+		const target = _INTERNAL.target,
+		      kind = _INTERNAL.kind,
+		      index = _INTERNAL.index;
+
+		const values = getHeaders(target, kind);
+		const len = values.length;
+		if (index >= len) {
+			return {
+				value: undefined,
+				done: true
+			};
+		}
+
+		this[INTERNAL].index = index + 1;
+
+		return {
+			value: values[index],
+			done: false
+		};
+	}
+}, Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]())));
+
+Object.defineProperty(HeadersIteratorPrototype, Symbol.toStringTag, {
+	value: 'HeadersIterator',
+	writable: false,
+	enumerable: false,
+	configurable: true
+});
+
+/**
+ * Export the Headers object in a form that Node.js can consume.
+ *
+ * @param   Headers  headers
+ * @return  Object
+ */
+function exportNodeCompatibleHeaders(headers) {
+	const obj = Object.assign({ __proto__: null }, headers[MAP]);
+
+	// http.request() only supports string as Host header. This hack makes
+	// specifying custom Host header possible.
+	const hostHeaderKey = find(headers[MAP], 'Host');
+	if (hostHeaderKey !== undefined) {
+		obj[hostHeaderKey] = obj[hostHeaderKey][0];
+	}
+
+	return obj;
+}
+
+/**
+ * Create a Headers object from an object of headers, ignoring those that do
+ * not conform to HTTP grammar productions.
+ *
+ * @param   Object  obj  Object of headers
+ * @return  Headers
+ */
+function createHeadersLenient(obj) {
+	const headers = new Headers();
+	for (const name of Object.keys(obj)) {
+		if (invalidTokenRegex.test(name)) {
+			continue;
+		}
+		if (Array.isArray(obj[name])) {
+			for (const val of obj[name]) {
+				if (invalidHeaderCharRegex.test(val)) {
+					continue;
+				}
+				if (headers[MAP][name] === undefined) {
+					headers[MAP][name] = [val];
+				} else {
+					headers[MAP][name].push(val);
+				}
+			}
+		} else if (!invalidHeaderCharRegex.test(obj[name])) {
+			headers[MAP][name] = [obj[name]];
+		}
+	}
+	return headers;
+}
+
+const INTERNALS$1 = Symbol('Response internals');
+
+// fix an issue where "STATUS_CODES" aren't a named export for node <10
+const STATUS_CODES = http.STATUS_CODES;
+
+/**
+ * Response class
+ *
+ * @param   Stream  body  Readable stream
+ * @param   Object  opts  Response options
+ * @return  Void
+ */
+class Response {
+	constructor() {
+		let body = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : null;
+		let opts = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+
+		Body.call(this, body, opts);
+
+		const status = opts.status || 200;
+		const headers = new Headers(opts.headers);
+
+		if (body != null && !headers.has('Content-Type')) {
+			const contentType = extractContentType(body);
+			if (contentType) {
+				headers.append('Content-Type', contentType);
+			}
+		}
+
+		this[INTERNALS$1] = {
+			url: opts.url,
+			status,
+			statusText: opts.statusText || STATUS_CODES[status],
+			headers,
+			counter: opts.counter
+		};
+	}
+
+	get url() {
+		return this[INTERNALS$1].url || '';
+	}
+
+	get status() {
+		return this[INTERNALS$1].status;
+	}
+
+	/**
+  * Convenience property representing if the request ended normally
+  */
+	get ok() {
+		return this[INTERNALS$1].status >= 200 && this[INTERNALS$1].status < 300;
+	}
+
+	get redirected() {
+		return this[INTERNALS$1].counter > 0;
+	}
+
+	get statusText() {
+		return this[INTERNALS$1].statusText;
+	}
+
+	get headers() {
+		return this[INTERNALS$1].headers;
+	}
+
+	/**
+  * Clone this response
+  *
+  * @return  Response
+  */
+	clone() {
+		return new Response(clone(this), {
+			url: this.url,
+			status: this.status,
+			statusText: this.statusText,
+			headers: this.headers,
+			ok: this.ok,
+			redirected: this.redirected
+		});
+	}
+}
+
+Body.mixIn(Response.prototype);
+
+Object.defineProperties(Response.prototype, {
+	url: { enumerable: true },
+	status: { enumerable: true },
+	ok: { enumerable: true },
+	redirected: { enumerable: true },
+	statusText: { enumerable: true },
+	headers: { enumerable: true },
+	clone: { enumerable: true }
+});
+
+Object.defineProperty(Response.prototype, Symbol.toStringTag, {
+	value: 'Response',
+	writable: false,
+	enumerable: false,
+	configurable: true
+});
+
+const INTERNALS$2 = Symbol('Request internals');
+
+// fix an issue where "format", "parse" aren't a named export for node <10
+const parse_url = Url.parse;
+const format_url = Url.format;
+
+const streamDestructionSupported = 'destroy' in Stream.Readable.prototype;
+
+/**
+ * Check if a value is an instance of Request.
+ *
+ * @param   Mixed   input
+ * @return  Boolean
+ */
+function isRequest(input) {
+	return typeof input === 'object' && typeof input[INTERNALS$2] === 'object';
+}
+
+function isAbortSignal(signal) {
+	const proto = signal && typeof signal === 'object' && Object.getPrototypeOf(signal);
+	return !!(proto && proto.constructor.name === 'AbortSignal');
+}
+
+/**
+ * Request class
+ *
+ * @param   Mixed   input  Url or Request instance
+ * @param   Object  init   Custom options
+ * @return  Void
+ */
+class Request {
+	constructor(input) {
+		let init = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+
+		let parsedURL;
+
+		// normalize input
+		if (!isRequest(input)) {
+			if (input && input.href) {
+				// in order to support Node.js' Url objects; though WHATWG's URL objects
+				// will fall into this branch also (since their `toString()` will return
+				// `href` property anyway)
+				parsedURL = parse_url(input.href);
+			} else {
+				// coerce input to a string before attempting to parse
+				parsedURL = parse_url(`${input}`);
+			}
+			input = {};
+		} else {
+			parsedURL = parse_url(input.url);
+		}
+
+		let method = init.method || input.method || 'GET';
+		method = method.toUpperCase();
+
+		if ((init.body != null || isRequest(input) && input.body !== null) && (method === 'GET' || method === 'HEAD')) {
+			throw new TypeError('Request with GET/HEAD method cannot have body');
+		}
+
+		let inputBody = init.body != null ? init.body : isRequest(input) && input.body !== null ? clone(input) : null;
+
+		Body.call(this, inputBody, {
+			timeout: init.timeout || input.timeout || 0,
+			size: init.size || input.size || 0
+		});
+
+		const headers = new Headers(init.headers || input.headers || {});
+
+		if (inputBody != null && !headers.has('Content-Type')) {
+			const contentType = extractContentType(inputBody);
+			if (contentType) {
+				headers.append('Content-Type', contentType);
+			}
+		}
+
+		let signal = isRequest(input) ? input.signal : null;
+		if ('signal' in init) signal = init.signal;
+
+		if (signal != null && !isAbortSignal(signal)) {
+			throw new TypeError('Expected signal to be an instanceof AbortSignal');
+		}
+
+		this[INTERNALS$2] = {
+			method,
+			redirect: init.redirect || input.redirect || 'follow',
+			headers,
+			parsedURL,
+			signal
+		};
+
+		// node-fetch-only options
+		this.follow = init.follow !== undefined ? init.follow : input.follow !== undefined ? input.follow : 20;
+		this.compress = init.compress !== undefined ? init.compress : input.compress !== undefined ? input.compress : true;
+		this.counter = init.counter || input.counter || 0;
+		this.agent = init.agent || input.agent;
+	}
+
+	get method() {
+		return this[INTERNALS$2].method;
+	}
+
+	get url() {
+		return format_url(this[INTERNALS$2].parsedURL);
+	}
+
+	get headers() {
+		return this[INTERNALS$2].headers;
+	}
+
+	get redirect() {
+		return this[INTERNALS$2].redirect;
+	}
+
+	get signal() {
+		return this[INTERNALS$2].signal;
+	}
+
+	/**
+  * Clone this request
+  *
+  * @return  Request
+  */
+	clone() {
+		return new Request(this);
+	}
+}
+
+Body.mixIn(Request.prototype);
+
+Object.defineProperty(Request.prototype, Symbol.toStringTag, {
+	value: 'Request',
+	writable: false,
+	enumerable: false,
+	configurable: true
+});
+
+Object.defineProperties(Request.prototype, {
+	method: { enumerable: true },
+	url: { enumerable: true },
+	headers: { enumerable: true },
+	redirect: { enumerable: true },
+	clone: { enumerable: true },
+	signal: { enumerable: true }
+});
+
+/**
+ * Convert a Request to Node.js http request options.
+ *
+ * @param   Request  A Request instance
+ * @return  Object   The options object to be passed to http.request
+ */
+function getNodeRequestOptions(request) {
+	const parsedURL = request[INTERNALS$2].parsedURL;
+	const headers = new Headers(request[INTERNALS$2].headers);
+
+	// fetch step 1.3
+	if (!headers.has('Accept')) {
+		headers.set('Accept', '*/*');
+	}
+
+	// Basic fetch
+	if (!parsedURL.protocol || !parsedURL.hostname) {
+		throw new TypeError('Only absolute URLs are supported');
+	}
+
+	if (!/^https?:$/.test(parsedURL.protocol)) {
+		throw new TypeError('Only HTTP(S) protocols are supported');
+	}
+
+	if (request.signal && request.body instanceof Stream.Readable && !streamDestructionSupported) {
+		throw new Error('Cancellation of streamed requests with AbortSignal is not supported in node < 8');
+	}
+
+	// HTTP-network-or-cache fetch steps 2.4-2.7
+	let contentLengthValue = null;
+	if (request.body == null && /^(POST|PUT)$/i.test(request.method)) {
+		contentLengthValue = '0';
+	}
+	if (request.body != null) {
+		const totalBytes = getTotalBytes(request);
+		if (typeof totalBytes === 'number') {
+			contentLengthValue = String(totalBytes);
+		}
+	}
+	if (contentLengthValue) {
+		headers.set('Content-Length', contentLengthValue);
+	}
+
+	// HTTP-network-or-cache fetch step 2.11
+	if (!headers.has('User-Agent')) {
+		headers.set('User-Agent', 'node-fetch/1.0 (+https://github.com/bitinn/node-fetch)');
+	}
+
+	// HTTP-network-or-cache fetch step 2.15
+	if (request.compress && !headers.has('Accept-Encoding')) {
+		headers.set('Accept-Encoding', 'gzip,deflate');
+	}
+
+	let agent = request.agent;
+	if (typeof agent === 'function') {
+		agent = agent(parsedURL);
+	}
+
+	if (!headers.has('Connection') && !agent) {
+		headers.set('Connection', 'close');
+	}
+
+	// HTTP-network fetch step 4.2
+	// chunked encoding is handled by Node.js
+
+	return Object.assign({}, parsedURL, {
+		method: request.method,
+		headers: exportNodeCompatibleHeaders(headers),
+		agent
+	});
+}
+
+/**
+ * abort-error.js
+ *
+ * AbortError interface for cancelled requests
+ */
+
+/**
+ * Create AbortError instance
+ *
+ * @param   String      message      Error message for human
+ * @return  AbortError
+ */
+function AbortError(message) {
+  Error.call(this, message);
+
+  this.type = 'aborted';
+  this.message = message;
+
+  // hide custom error implementation details from end-users
+  Error.captureStackTrace(this, this.constructor);
+}
+
+AbortError.prototype = Object.create(Error.prototype);
+AbortError.prototype.constructor = AbortError;
+AbortError.prototype.name = 'AbortError';
+
+// fix an issue where "PassThrough", "resolve" aren't a named export for node <10
+const PassThrough$1 = Stream.PassThrough;
+const resolve_url = Url.resolve;
+
+/**
+ * Fetch function
+ *
+ * @param   Mixed    url   Absolute url or Request instance
+ * @param   Object   opts  Fetch options
+ * @return  Promise
+ */
+function fetch(url, opts) {
+
+	// allow custom promise
+	if (!fetch.Promise) {
+		throw new Error('native promise missing, set fetch.Promise to your favorite alternative');
+	}
+
+	Body.Promise = fetch.Promise;
+
+	// wrap http.request into fetch
+	return new fetch.Promise(function (resolve, reject) {
+		// build request object
+		const request = new Request(url, opts);
+		const options = getNodeRequestOptions(request);
+
+		const send = (options.protocol === 'https:' ? https : http).request;
+		const signal = request.signal;
+
+		let response = null;
+
+		const abort = function abort() {
+			let error = new AbortError('The user aborted a request.');
+			reject(error);
+			if (request.body && request.body instanceof Stream.Readable) {
+				request.body.destroy(error);
+			}
+			if (!response || !response.body) return;
+			response.body.emit('error', error);
+		};
+
+		if (signal && signal.aborted) {
+			abort();
+			return;
+		}
+
+		const abortAndFinalize = function abortAndFinalize() {
+			abort();
+			finalize();
+		};
+
+		// send request
+		const req = send(options);
+		let reqTimeout;
+
+		if (signal) {
+			signal.addEventListener('abort', abortAndFinalize);
+		}
+
+		function finalize() {
+			req.abort();
+			if (signal) signal.removeEventListener('abort', abortAndFinalize);
+			clearTimeout(reqTimeout);
+		}
+
+		if (request.timeout) {
+			req.once('socket', function (socket) {
+				reqTimeout = setTimeout(function () {
+					reject(new FetchError(`network timeout at: ${request.url}`, 'request-timeout'));
+					finalize();
+				}, request.timeout);
+			});
+		}
+
+		req.on('error', function (err) {
+			reject(new FetchError(`request to ${request.url} failed, reason: ${err.message}`, 'system', err));
+			finalize();
+		});
+
+		req.on('response', function (res) {
+			clearTimeout(reqTimeout);
+
+			const headers = createHeadersLenient(res.headers);
+
+			// HTTP fetch step 5
+			if (fetch.isRedirect(res.statusCode)) {
+				// HTTP fetch step 5.2
+				const location = headers.get('Location');
+
+				// HTTP fetch step 5.3
+				const locationURL = location === null ? null : resolve_url(request.url, location);
+
+				// HTTP fetch step 5.5
+				switch (request.redirect) {
+					case 'error':
+						reject(new FetchError(`redirect mode is set to error: ${request.url}`, 'no-redirect'));
+						finalize();
+						return;
+					case 'manual':
+						// node-fetch-specific step: make manual redirect a bit easier to use by setting the Location header value to the resolved URL.
+						if (locationURL !== null) {
+							// handle corrupted header
+							try {
+								headers.set('Location', locationURL);
+							} catch (err) {
+								// istanbul ignore next: nodejs server prevent invalid response headers, we can't test this through normal request
+								reject(err);
+							}
+						}
+						break;
+					case 'follow':
+						// HTTP-redirect fetch step 2
+						if (locationURL === null) {
+							break;
+						}
+
+						// HTTP-redirect fetch step 5
+						if (request.counter >= request.follow) {
+							reject(new FetchError(`maximum redirect reached at: ${request.url}`, 'max-redirect'));
+							finalize();
+							return;
+						}
+
+						// HTTP-redirect fetch step 6 (counter increment)
+						// Create a new Request object.
+						const requestOpts = {
+							headers: new Headers(request.headers),
+							follow: request.follow,
+							counter: request.counter + 1,
+							agent: request.agent,
+							compress: request.compress,
+							method: request.method,
+							body: request.body,
+							signal: request.signal,
+							timeout: request.timeout
+						};
+
+						// HTTP-redirect fetch step 9
+						if (res.statusCode !== 303 && request.body && getTotalBytes(request) === null) {
+							reject(new FetchError('Cannot follow redirect with body being a readable stream', 'unsupported-redirect'));
+							finalize();
+							return;
+						}
+
+						// HTTP-redirect fetch step 11
+						if (res.statusCode === 303 || (res.statusCode === 301 || res.statusCode === 302) && request.method === 'POST') {
+							requestOpts.method = 'GET';
+							requestOpts.body = undefined;
+							requestOpts.headers.delete('content-length');
+						}
+
+						// HTTP-redirect fetch step 15
+						resolve(fetch(new Request(locationURL, requestOpts)));
+						finalize();
+						return;
+				}
+			}
+
+			// prepare response
+			res.once('end', function () {
+				if (signal) signal.removeEventListener('abort', abortAndFinalize);
+			});
+			let body = res.pipe(new PassThrough$1());
+
+			const response_options = {
+				url: request.url,
+				status: res.statusCode,
+				statusText: res.statusMessage,
+				headers: headers,
+				size: request.size,
+				timeout: request.timeout,
+				counter: request.counter
+			};
+
+			// HTTP-network fetch step 12.1.1.3
+			const codings = headers.get('Content-Encoding');
+
+			// HTTP-network fetch step 12.1.1.4: handle content codings
+
+			// in following scenarios we ignore compression support
+			// 1. compression support is disabled
+			// 2. HEAD request
+			// 3. no Content-Encoding header
+			// 4. no content response (204)
+			// 5. content not modified response (304)
+			if (!request.compress || request.method === 'HEAD' || codings === null || res.statusCode === 204 || res.statusCode === 304) {
+				response = new Response(body, response_options);
+				resolve(response);
+				return;
+			}
+
+			// For Node v6+
+			// Be less strict when decoding compressed responses, since sometimes
+			// servers send slightly invalid responses that are still accepted
+			// by common browsers.
+			// Always using Z_SYNC_FLUSH is what cURL does.
+			const zlibOptions = {
+				flush: zlib.Z_SYNC_FLUSH,
+				finishFlush: zlib.Z_SYNC_FLUSH
+			};
+
+			// for gzip
+			if (codings == 'gzip' || codings == 'x-gzip') {
+				body = body.pipe(zlib.createGunzip(zlibOptions));
+				response = new Response(body, response_options);
+				resolve(response);
+				return;
+			}
+
+			// for deflate
+			if (codings == 'deflate' || codings == 'x-deflate') {
+				// handle the infamous raw deflate response from old servers
+				// a hack for old IIS and Apache servers
+				const raw = res.pipe(new PassThrough$1());
+				raw.once('data', function (chunk) {
+					// see http://stackoverflow.com/questions/37519828
+					if ((chunk[0] & 0x0F) === 0x08) {
+						body = body.pipe(zlib.createInflate());
+					} else {
+						body = body.pipe(zlib.createInflateRaw());
+					}
+					response = new Response(body, response_options);
+					resolve(response);
+				});
+				return;
+			}
+
+			// for br
+			if (codings == 'br' && typeof zlib.createBrotliDecompress === 'function') {
+				body = body.pipe(zlib.createBrotliDecompress());
+				response = new Response(body, response_options);
+				resolve(response);
+				return;
+			}
+
+			// otherwise, use response as-is
+			response = new Response(body, response_options);
+			resolve(response);
+		});
+
+		writeToStream(req, request);
+	});
+}
+/**
+ * Redirect code matching
+ *
+ * @param   Number   code  Status code
+ * @return  Boolean
+ */
+fetch.isRedirect = function (code) {
+	return code === 301 || code === 302 || code === 303 || code === 307 || code === 308;
+};
+
+// expose Promise
+fetch.Promise = global.Promise;
+
+module.exports = exports = fetch;
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = exports;
+exports.Headers = Headers;
+exports.Request = Request;
+exports.Response = Response;
+exports.FetchError = FetchError;
+
+
+/***/ }),
 /* 455 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
@@ -18624,10 +24574,10 @@ var Har = __webpack_require__(416).Har
 var Auth = __webpack_require__(554).Auth
 var OAuth = __webpack_require__(287).OAuth
 var hawk = __webpack_require__(964)
-var Multipart = __webpack_require__(469).Multipart
+var Multipart = __webpack_require__(946).Multipart
 var Redirect = __webpack_require__(552).Redirect
-var Tunnel = __webpack_require__(461).Tunnel
-var now = __webpack_require__(742)
+var Tunnel = __webpack_require__(135).Tunnel
+var now = __webpack_require__(551)
 var Buffer = __webpack_require__(608).Buffer
 
 var safeStringify = helpers.safeStringify
@@ -20165,192 +26115,224 @@ module.exports = '2.5.0'
 /***/ }),
 /* 460 */,
 /* 461 */
+/***/ (function(module) {
+
+var isES5 = (function(){
+    "use strict";
+    return this === undefined;
+})();
+
+if (isES5) {
+    module.exports = {
+        freeze: Object.freeze,
+        defineProperty: Object.defineProperty,
+        getDescriptor: Object.getOwnPropertyDescriptor,
+        keys: Object.keys,
+        names: Object.getOwnPropertyNames,
+        getPrototypeOf: Object.getPrototypeOf,
+        isArray: Array.isArray,
+        isES5: isES5,
+        propertyIsWritable: function(obj, prop) {
+            var descriptor = Object.getOwnPropertyDescriptor(obj, prop);
+            return !!(!descriptor || descriptor.writable || descriptor.set);
+        }
+    };
+} else {
+    var has = {}.hasOwnProperty;
+    var str = {}.toString;
+    var proto = {}.constructor.prototype;
+
+    var ObjectKeys = function (o) {
+        var ret = [];
+        for (var key in o) {
+            if (has.call(o, key)) {
+                ret.push(key);
+            }
+        }
+        return ret;
+    };
+
+    var ObjectGetDescriptor = function(o, key) {
+        return {value: o[key]};
+    };
+
+    var ObjectDefineProperty = function (o, key, desc) {
+        o[key] = desc.value;
+        return o;
+    };
+
+    var ObjectFreeze = function (obj) {
+        return obj;
+    };
+
+    var ObjectGetPrototypeOf = function (obj) {
+        try {
+            return Object(obj).constructor.prototype;
+        }
+        catch (e) {
+            return proto;
+        }
+    };
+
+    var ArrayIsArray = function (obj) {
+        try {
+            return str.call(obj) === "[object Array]";
+        }
+        catch(e) {
+            return false;
+        }
+    };
+
+    module.exports = {
+        isArray: ArrayIsArray,
+        keys: ObjectKeys,
+        names: ObjectKeys,
+        defineProperty: ObjectDefineProperty,
+        getDescriptor: ObjectGetDescriptor,
+        freeze: ObjectFreeze,
+        getPrototypeOf: ObjectGetPrototypeOf,
+        isES5: isES5,
+        propertyIsWritable: function() {
+            return true;
+        }
+    };
+}
+
+
+/***/ }),
+/* 462 */
+/***/ (function(module) {
+
+"use strict";
+
+
+// See http://www.robvanderwoude.com/escapechars.php
+const metaCharsRegExp = /([()\][%!^"`<>&|;, *?])/g;
+
+function escapeCommand(arg) {
+    // Escape meta chars
+    arg = arg.replace(metaCharsRegExp, '^$1');
+
+    return arg;
+}
+
+function escapeArgument(arg, doubleEscapeMetaChars) {
+    // Convert to string
+    arg = `${arg}`;
+
+    // Algorithm below is based on https://qntm.org/cmd
+
+    // Sequence of backslashes followed by a double quote:
+    // double up all the backslashes and escape the double quote
+    arg = arg.replace(/(\\*)"/g, '$1$1\\"');
+
+    // Sequence of backslashes followed by the end of the string
+    // (which will become a double quote later):
+    // double up all the backslashes
+    arg = arg.replace(/(\\*)$/, '$1$1');
+
+    // All other backslashes occur literally
+
+    // Quote the whole thing:
+    arg = `"${arg}"`;
+
+    // Escape meta chars
+    arg = arg.replace(metaCharsRegExp, '^$1');
+
+    // Double escape meta chars if necessary
+    if (doubleEscapeMetaChars) {
+        arg = arg.replace(metaCharsRegExp, '^$1');
+    }
+
+    return arg;
+}
+
+module.exports.command = escapeCommand;
+module.exports.argument = escapeArgument;
+
+
+/***/ }),
+/* 463 */
 /***/ (function(__unusedmodule, exports, __webpack_require__) {
 
 "use strict";
 
 
-var url = __webpack_require__(835)
-var tunnel = __webpack_require__(243)
+Object.defineProperty(exports, '__esModule', { value: true });
 
-var defaultProxyHeaderWhiteList = [
-  'accept',
-  'accept-charset',
-  'accept-encoding',
-  'accept-language',
-  'accept-ranges',
-  'cache-control',
-  'content-encoding',
-  'content-language',
-  'content-location',
-  'content-md5',
-  'content-range',
-  'content-type',
-  'connection',
-  'date',
-  'expect',
-  'max-forwards',
-  'pragma',
-  'referer',
-  'te',
-  'user-agent',
-  'via'
-]
+function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
 
-var defaultProxyHeaderExclusiveList = [
-  'proxy-authorization'
-]
+var deprecation = __webpack_require__(692);
+var once = _interopDefault(__webpack_require__(969));
 
-function constructProxyHost (uriObject) {
-  var port = uriObject.port
-  var protocol = uriObject.protocol
-  var proxyHost = uriObject.hostname + ':'
+const logOnce = once(deprecation => console.warn(deprecation));
+/**
+ * Error with extra properties to help with debugging
+ */
 
-  if (port) {
-    proxyHost += port
-  } else if (protocol === 'https:') {
-    proxyHost += '443'
-  } else {
-    proxyHost += '80'
+class RequestError extends Error {
+  constructor(message, statusCode, options) {
+    super(message); // Maintains proper stack trace (only available on V8)
+
+    /* istanbul ignore next */
+
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, this.constructor);
+    }
+
+    this.name = "HttpError";
+    this.status = statusCode;
+    Object.defineProperty(this, "code", {
+      get() {
+        logOnce(new deprecation.Deprecation("[@octokit/request-error] `error.code` is deprecated, use `error.status`."));
+        return statusCode;
+      }
+
+    });
+    this.headers = options.headers || {}; // redact request credentials without mutating original request options
+
+    const requestCopy = Object.assign({}, options.request);
+
+    if (options.request.headers.authorization) {
+      requestCopy.headers = Object.assign({}, options.request.headers, {
+        authorization: options.request.headers.authorization.replace(/ .*$/, " [REDACTED]")
+      });
+    }
+
+    requestCopy.url = requestCopy.url // client_id & client_secret can be passed as URL query parameters to increase rate limit
+    // see https://developer.github.com/v3/#increasing-the-unauthenticated-rate-limit-for-oauth-applications
+    .replace(/\bclient_secret=\w+/g, "client_secret=[REDACTED]") // OAuth tokens can be passed as URL query parameters, although it is not recommended
+    // see https://developer.github.com/v3/#oauth2-token-sent-in-a-header
+    .replace(/\baccess_token=\w+/g, "access_token=[REDACTED]");
+    this.request = requestCopy;
   }
 
-  return proxyHost
 }
 
-function constructProxyHeaderWhiteList (headers, proxyHeaderWhiteList) {
-  var whiteList = proxyHeaderWhiteList
-    .reduce(function (set, header) {
-      set[header.toLowerCase()] = true
-      return set
-    }, {})
-
-  return Object.keys(headers)
-    .filter(function (header) {
-      return whiteList[header.toLowerCase()]
-    })
-    .reduce(function (set, header) {
-      set[header] = headers[header]
-      return set
-    }, {})
-}
-
-function constructTunnelOptions (request, proxyHeaders) {
-  var proxy = request.proxy
-
-  var tunnelOptions = {
-    proxy: {
-      host: proxy.hostname,
-      port: +proxy.port,
-      proxyAuth: proxy.auth,
-      headers: proxyHeaders
-    },
-    headers: request.headers,
-    ca: request.ca,
-    cert: request.cert,
-    key: request.key,
-    passphrase: request.passphrase,
-    pfx: request.pfx,
-    ciphers: request.ciphers,
-    rejectUnauthorized: request.rejectUnauthorized,
-    secureOptions: request.secureOptions,
-    secureProtocol: request.secureProtocol
-  }
-
-  return tunnelOptions
-}
-
-function constructTunnelFnName (uri, proxy) {
-  var uriProtocol = (uri.protocol === 'https:' ? 'https' : 'http')
-  var proxyProtocol = (proxy.protocol === 'https:' ? 'Https' : 'Http')
-  return [uriProtocol, proxyProtocol].join('Over')
-}
-
-function getTunnelFn (request) {
-  var uri = request.uri
-  var proxy = request.proxy
-  var tunnelFnName = constructTunnelFnName(uri, proxy)
-  return tunnel[tunnelFnName]
-}
-
-function Tunnel (request) {
-  this.request = request
-  this.proxyHeaderWhiteList = defaultProxyHeaderWhiteList
-  this.proxyHeaderExclusiveList = []
-  if (typeof request.tunnel !== 'undefined') {
-    this.tunnelOverride = request.tunnel
-  }
-}
-
-Tunnel.prototype.isEnabled = function () {
-  var self = this
-  var request = self.request
-    // Tunnel HTTPS by default. Allow the user to override this setting.
-
-  // If self.tunnelOverride is set (the user specified a value), use it.
-  if (typeof self.tunnelOverride !== 'undefined') {
-    return self.tunnelOverride
-  }
-
-  // If the destination is HTTPS, tunnel.
-  if (request.uri.protocol === 'https:') {
-    return true
-  }
-
-  // Otherwise, do not use tunnel.
-  return false
-}
-
-Tunnel.prototype.setup = function (options) {
-  var self = this
-  var request = self.request
-
-  options = options || {}
-
-  if (typeof request.proxy === 'string') {
-    request.proxy = url.parse(request.proxy)
-  }
-
-  if (!request.proxy || !request.tunnel) {
-    return false
-  }
-
-  // Setup Proxy Header Exclusive List and White List
-  if (options.proxyHeaderWhiteList) {
-    self.proxyHeaderWhiteList = options.proxyHeaderWhiteList
-  }
-  if (options.proxyHeaderExclusiveList) {
-    self.proxyHeaderExclusiveList = options.proxyHeaderExclusiveList
-  }
-
-  var proxyHeaderExclusiveList = self.proxyHeaderExclusiveList.concat(defaultProxyHeaderExclusiveList)
-  var proxyHeaderWhiteList = self.proxyHeaderWhiteList.concat(proxyHeaderExclusiveList)
-
-  // Setup Proxy Headers and Proxy Headers Host
-  // Only send the Proxy White Listed Header names
-  var proxyHeaders = constructProxyHeaderWhiteList(request.headers, proxyHeaderWhiteList)
-  proxyHeaders.host = constructProxyHost(request.uri)
-
-  proxyHeaderExclusiveList.forEach(request.removeHeader, request)
-
-  // Set Agent from Tunnel Data
-  var tunnelFn = getTunnelFn(request)
-  var tunnelOptions = constructTunnelOptions(request, proxyHeaders)
-  request.agent = tunnelFn(tunnelOptions)
-
-  return true
-}
-
-Tunnel.defaultProxyHeaderWhiteList = defaultProxyHeaderWhiteList
-Tunnel.defaultProxyHeaderExclusiveList = defaultProxyHeaderExclusiveList
-exports.Tunnel = Tunnel
+exports.RequestError = RequestError;
+//# sourceMappingURL=index.js.map
 
 
 /***/ }),
-/* 462 */,
-/* 463 */,
 /* 464 */,
 /* 465 */,
-/* 466 */,
+/* 466 */
+/***/ (function(__unusedmodule, exports) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+class FieldStyleImpl {
+    constructor() {
+        this.id = '';
+        this.background = '';
+        this.foreground = '';
+    }
+}
+exports.FieldStyleImpl = FieldStyleImpl;
+
+
+/***/ }),
 /* 467 */
 /***/ (function(__unusedmodule, exports, __webpack_require__) {
 
@@ -20420,118 +26402,99 @@ exports.permuteDomain = permuteDomain;
 
 "use strict";
 
-
-var uuid = __webpack_require__(826)
-var CombinedStream = __webpack_require__(547)
-var isstream = __webpack_require__(382)
-var Buffer = __webpack_require__(608).Buffer
-
-function Multipart (request) {
-  this.request = request
-  this.boundary = uuid()
-  this.chunked = false
-  this.body = null
-}
-
-Multipart.prototype.isChunked = function (options) {
-  var self = this
-  var chunked = false
-  var parts = options.data || options
-
-  if (!parts.forEach) {
-    self.request.emit('error', new Error('Argument error, options.multipart.'))
-  }
-
-  if (options.chunked !== undefined) {
-    chunked = options.chunked
-  }
-
-  if (self.request.getHeader('transfer-encoding') === 'chunked') {
-    chunked = true
-  }
-
-  if (!chunked) {
-    parts.forEach(function (part) {
-      if (typeof part.body === 'undefined') {
-        self.request.emit('error', new Error('Body attribute missing in multipart.'))
-      }
-      if (isstream(part.body)) {
-        chunked = true
-      }
-    })
-  }
-
-  return chunked
-}
-
-Multipart.prototype.setHeaders = function (chunked) {
-  var self = this
-
-  if (chunked && !self.request.hasHeader('transfer-encoding')) {
-    self.request.setHeader('transfer-encoding', 'chunked')
-  }
-
-  var header = self.request.getHeader('content-type')
-
-  if (!header || header.indexOf('multipart') === -1) {
-    self.request.setHeader('content-type', 'multipart/related; boundary=' + self.boundary)
-  } else {
-    if (header.indexOf('boundary') !== -1) {
-      self.boundary = header.replace(/.*boundary=([^\s;]+).*/, '$1')
-    } else {
-      self.request.setHeader('content-type', header + '; boundary=' + self.boundary)
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
+    result["default"] = mod;
+    return result;
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+// Originally pulled from https://github.com/JasonEtco/actions-toolkit/blob/master/src/github.ts
+const graphql_1 = __webpack_require__(898);
+const rest_1 = __importDefault(__webpack_require__(0));
+const Context = __importStar(__webpack_require__(262));
+const httpClient = __importStar(__webpack_require__(539));
+// We need this in order to extend Octokit
+rest_1.default.prototype = new rest_1.default();
+exports.context = new Context.Context();
+class GitHub extends rest_1.default {
+    constructor(token, opts) {
+        super(GitHub.getOctokitOptions(GitHub.disambiguate(token, opts)));
+        this.graphql = GitHub.getGraphQL(GitHub.disambiguate(token, opts));
     }
-  }
-}
-
-Multipart.prototype.build = function (parts, chunked) {
-  var self = this
-  var body = chunked ? new CombinedStream() : []
-
-  function add (part) {
-    if (typeof part === 'number') {
-      part = part.toString()
+    /**
+     * Disambiguates the constructor overload parameters
+     */
+    static disambiguate(token, opts) {
+        return [
+            typeof token === 'string' ? token : '',
+            typeof token === 'object' ? token : opts || {}
+        ];
     }
-    return chunked ? body.append(part) : body.push(Buffer.from(part))
-  }
-
-  if (self.request.preambleCRLF) {
-    add('\r\n')
-  }
-
-  parts.forEach(function (part) {
-    var preamble = '--' + self.boundary + '\r\n'
-    Object.keys(part).forEach(function (key) {
-      if (key === 'body') { return }
-      preamble += key + ': ' + part[key] + '\r\n'
-    })
-    preamble += '\r\n'
-    add(preamble)
-    add(part.body)
-    add('\r\n')
-  })
-  add('--' + self.boundary + '--')
-
-  if (self.request.postambleCRLF) {
-    add('\r\n')
-  }
-
-  return body
+    static getOctokitOptions(args) {
+        const token = args[0];
+        const options = Object.assign({}, args[1]); // Shallow clone - don't mutate the object provided by the caller
+        // Auth
+        const auth = GitHub.getAuthString(token, options);
+        if (auth) {
+            options.auth = auth;
+        }
+        // Proxy
+        const agent = GitHub.getProxyAgent(options);
+        if (agent) {
+            // Shallow clone - don't mutate the object provided by the caller
+            options.request = options.request ? Object.assign({}, options.request) : {};
+            // Set the agent
+            options.request.agent = agent;
+        }
+        return options;
+    }
+    static getGraphQL(args) {
+        const defaults = {};
+        const token = args[0];
+        const options = args[1];
+        // Authorization
+        const auth = this.getAuthString(token, options);
+        if (auth) {
+            defaults.headers = {
+                authorization: auth
+            };
+        }
+        // Proxy
+        const agent = GitHub.getProxyAgent(options);
+        if (agent) {
+            defaults.request = { agent };
+        }
+        return graphql_1.graphql.defaults(defaults);
+    }
+    static getAuthString(token, options) {
+        // Validate args
+        if (!token && !options.auth) {
+            throw new Error('Parameter token or opts.auth is required');
+        }
+        else if (token && options.auth) {
+            throw new Error('Parameters token and opts.auth may not both be specified');
+        }
+        return typeof options.auth === 'string' ? options.auth : `token ${token}`;
+    }
+    static getProxyAgent(options) {
+        var _a;
+        if (!((_a = options.request) === null || _a === void 0 ? void 0 : _a.agent)) {
+            const serverUrl = 'https://api.github.com';
+            if (httpClient.getProxyUrl(serverUrl)) {
+                const hc = new httpClient.HttpClient();
+                return hc.getAgent(serverUrl);
+            }
+        }
+        return undefined;
+    }
 }
-
-Multipart.prototype.onRequest = function (options) {
-  var self = this
-
-  var chunked = self.isChunked(options)
-  var parts = options.data || options
-
-  self.setHeaders(chunked)
-  self.chunked = chunked
-  self.body = self.build(parts, chunked)
-}
-
-exports.Multipart = Multipart
-
+exports.GitHub = GitHub;
+//# sourceMappingURL=github.js.map
 
 /***/ }),
 /* 470 */
@@ -20717,10 +26680,73 @@ exports.group = group;
 //# sourceMappingURL=core.js.map
 
 /***/ }),
-/* 471 */,
+/* 471 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = authenticationBeforeRequest;
+
+const btoa = __webpack_require__(675);
+const uniq = __webpack_require__(126);
+
+function authenticationBeforeRequest(state, options) {
+  if (!state.auth.type) {
+    return;
+  }
+
+  if (state.auth.type === "basic") {
+    const hash = btoa(`${state.auth.username}:${state.auth.password}`);
+    options.headers.authorization = `Basic ${hash}`;
+    return;
+  }
+
+  if (state.auth.type === "token") {
+    options.headers.authorization = `token ${state.auth.token}`;
+    return;
+  }
+
+  if (state.auth.type === "app") {
+    options.headers.authorization = `Bearer ${state.auth.token}`;
+    const acceptHeaders = options.headers.accept
+      .split(",")
+      .concat("application/vnd.github.machine-man-preview+json");
+    options.headers.accept = uniq(acceptHeaders)
+      .filter(Boolean)
+      .join(",");
+    return;
+  }
+
+  options.url += options.url.indexOf("?") === -1 ? "?" : "&";
+
+  if (state.auth.token) {
+    options.url += `access_token=${encodeURIComponent(state.auth.token)}`;
+    return;
+  }
+
+  const key = encodeURIComponent(state.auth.key);
+  const secret = encodeURIComponent(state.auth.secret);
+  options.url += `client_id=${key}&client_secret=${secret}`;
+}
+
+
+/***/ }),
 /* 472 */,
 /* 473 */,
-/* 474 */,
+/* 474 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+
+var util = __webpack_require__(949);
+
+module.exports = SchemaObject;
+
+function SchemaObject(obj) {
+  util.copy(obj, this);
+}
+
+
+/***/ }),
 /* 475 */,
 /* 476 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
@@ -20910,7 +26936,90 @@ module.exports = function generate_if(it, $keyword, $ruleType) {
 
 /***/ }),
 /* 480 */,
-/* 481 */,
+/* 481 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+/* eslint-disable node/no-deprecated-api */
+
+
+
+var buffer = __webpack_require__(407)
+var Buffer = buffer.Buffer
+
+var safer = {}
+
+var key
+
+for (key in buffer) {
+  if (!buffer.hasOwnProperty(key)) continue
+  if (key === 'SlowBuffer' || key === 'Buffer') continue
+  safer[key] = buffer[key]
+}
+
+var Safer = safer.Buffer = {}
+for (key in Buffer) {
+  if (!Buffer.hasOwnProperty(key)) continue
+  if (key === 'allocUnsafe' || key === 'allocUnsafeSlow') continue
+  Safer[key] = Buffer[key]
+}
+
+safer.Buffer.prototype = Buffer.prototype
+
+if (!Safer.from || Safer.from === Uint8Array.from) {
+  Safer.from = function (value, encodingOrOffset, length) {
+    if (typeof value === 'number') {
+      throw new TypeError('The "value" argument must not be of type number. Received type ' + typeof value)
+    }
+    if (value && typeof value.length === 'undefined') {
+      throw new TypeError('The first argument must be one of type string, Buffer, ArrayBuffer, Array, or Array-like Object. Received type ' + typeof value)
+    }
+    return Buffer(value, encodingOrOffset, length)
+  }
+}
+
+if (!Safer.alloc) {
+  Safer.alloc = function (size, fill, encoding) {
+    if (typeof size !== 'number') {
+      throw new TypeError('The "size" argument must be of type number. Received type ' + typeof size)
+    }
+    if (size < 0 || size >= 2 * (1 << 30)) {
+      throw new RangeError('The value "' + size + '" is invalid for option "size"')
+    }
+    var buf = Buffer(size)
+    if (!fill || fill.length === 0) {
+      buf.fill(0)
+    } else if (typeof encoding === 'string') {
+      buf.fill(fill, encoding)
+    } else {
+      buf.fill(fill)
+    }
+    return buf
+  }
+}
+
+if (!safer.kStringMaxLength) {
+  try {
+    safer.kStringMaxLength = process.binding('buffer').kStringMaxLength
+  } catch (e) {
+    // we can't determine kStringMaxLength in environments where process.binding
+    // is unsupported, so let's not set it
+  }
+}
+
+if (!safer.constants) {
+  safer.constants = {
+    MAX_LENGTH: safer.kMaxLength
+  }
+  if (safer.kStringMaxLength) {
+    safer.constants.MAX_STRING_LENGTH = safer.kStringMaxLength
+  }
+}
+
+module.exports = safer
+
+
+/***/ }),
 /* 482 */,
 /* 483 */,
 /* 484 */,
@@ -20921,223 +27030,215 @@ module.exports = function generate_if(it, $keyword, $ruleType) {
 /* 489 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
-// Copyright (c) 2012, Mark Cavage. All rights reserved.
-// Copyright 2015 Joyent, Inc.
-
-var assert = __webpack_require__(357);
-var Stream = __webpack_require__(413).Stream;
-var util = __webpack_require__(669);
+"use strict";
 
 
-///--- Globals
+const path = __webpack_require__(622);
+const which = __webpack_require__(814);
+const pathKey = __webpack_require__(39)();
 
-/* JSSTYLED */
-var UUID_REGEXP = /^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$/;
+function resolveCommandAttempt(parsed, withoutPathExt) {
+    const cwd = process.cwd();
+    const hasCustomCwd = parsed.options.cwd != null;
 
-
-///--- Internal
-
-function _capitalize(str) {
-    return (str.charAt(0).toUpperCase() + str.slice(1));
-}
-
-function _toss(name, expected, oper, arg, actual) {
-    throw new assert.AssertionError({
-        message: util.format('%s (%s) is required', name, expected),
-        actual: (actual === undefined) ? typeof (arg) : actual(arg),
-        expected: expected,
-        operator: oper || '===',
-        stackStartFunction: _toss.caller
-    });
-}
-
-function _getClass(arg) {
-    return (Object.prototype.toString.call(arg).slice(8, -1));
-}
-
-function noop() {
-    // Why even bother with asserts?
-}
-
-
-///--- Exports
-
-var types = {
-    bool: {
-        check: function (arg) { return typeof (arg) === 'boolean'; }
-    },
-    func: {
-        check: function (arg) { return typeof (arg) === 'function'; }
-    },
-    string: {
-        check: function (arg) { return typeof (arg) === 'string'; }
-    },
-    object: {
-        check: function (arg) {
-            return typeof (arg) === 'object' && arg !== null;
+    // If a custom `cwd` was specified, we need to change the process cwd
+    // because `which` will do stat calls but does not support a custom cwd
+    if (hasCustomCwd) {
+        try {
+            process.chdir(parsed.options.cwd);
+        } catch (err) {
+            /* Empty */
         }
-    },
-    number: {
-        check: function (arg) {
-            return typeof (arg) === 'number' && !isNaN(arg);
-        }
-    },
-    finite: {
-        check: function (arg) {
-            return typeof (arg) === 'number' && !isNaN(arg) && isFinite(arg);
-        }
-    },
-    buffer: {
-        check: function (arg) { return Buffer.isBuffer(arg); },
-        operator: 'Buffer.isBuffer'
-    },
-    array: {
-        check: function (arg) { return Array.isArray(arg); },
-        operator: 'Array.isArray'
-    },
-    stream: {
-        check: function (arg) { return arg instanceof Stream; },
-        operator: 'instanceof',
-        actual: _getClass
-    },
-    date: {
-        check: function (arg) { return arg instanceof Date; },
-        operator: 'instanceof',
-        actual: _getClass
-    },
-    regexp: {
-        check: function (arg) { return arg instanceof RegExp; },
-        operator: 'instanceof',
-        actual: _getClass
-    },
-    uuid: {
-        check: function (arg) {
-            return typeof (arg) === 'string' && UUID_REGEXP.test(arg);
-        },
-        operator: 'isUUID'
-    }
-};
-
-function _setExports(ndebug) {
-    var keys = Object.keys(types);
-    var out;
-
-    /* re-export standard assert */
-    if (process.env.NODE_NDEBUG) {
-        out = noop;
-    } else {
-        out = function (arg, msg) {
-            if (!arg) {
-                _toss(msg, 'true', arg);
-            }
-        };
     }
 
-    /* standard checks */
-    keys.forEach(function (k) {
-        if (ndebug) {
-            out[k] = noop;
-            return;
-        }
-        var type = types[k];
-        out[k] = function (arg, msg) {
-            if (!type.check(arg)) {
-                _toss(msg, k, type.operator, arg, type.actual);
-            }
-        };
-    });
+    let resolved;
 
-    /* optional checks */
-    keys.forEach(function (k) {
-        var name = 'optional' + _capitalize(k);
-        if (ndebug) {
-            out[name] = noop;
-            return;
-        }
-        var type = types[k];
-        out[name] = function (arg, msg) {
-            if (arg === undefined || arg === null) {
-                return;
-            }
-            if (!type.check(arg)) {
-                _toss(msg, k, type.operator, arg, type.actual);
-            }
-        };
-    });
+    try {
+        resolved = which.sync(parsed.command, {
+            path: (parsed.options.env || process.env)[pathKey],
+            pathExt: withoutPathExt ? path.delimiter : undefined,
+        });
+    } catch (e) {
+        /* Empty */
+    } finally {
+        process.chdir(cwd);
+    }
 
-    /* arrayOf checks */
-    keys.forEach(function (k) {
-        var name = 'arrayOf' + _capitalize(k);
-        if (ndebug) {
-            out[name] = noop;
-            return;
-        }
-        var type = types[k];
-        var expected = '[' + k + ']';
-        out[name] = function (arg, msg) {
-            if (!Array.isArray(arg)) {
-                _toss(msg, expected, type.operator, arg, type.actual);
-            }
-            var i;
-            for (i = 0; i < arg.length; i++) {
-                if (!type.check(arg[i])) {
-                    _toss(msg, expected, type.operator, arg, type.actual);
-                }
-            }
-        };
-    });
+    // If we successfully resolved, ensure that an absolute path is returned
+    // Note that when a custom `cwd` was used, we need to resolve to an absolute path based on it
+    if (resolved) {
+        resolved = path.resolve(hasCustomCwd ? parsed.options.cwd : '', resolved);
+    }
 
-    /* optionalArrayOf checks */
-    keys.forEach(function (k) {
-        var name = 'optionalArrayOf' + _capitalize(k);
-        if (ndebug) {
-            out[name] = noop;
-            return;
-        }
-        var type = types[k];
-        var expected = '[' + k + ']';
-        out[name] = function (arg, msg) {
-            if (arg === undefined || arg === null) {
-                return;
-            }
-            if (!Array.isArray(arg)) {
-                _toss(msg, expected, type.operator, arg, type.actual);
-            }
-            var i;
-            for (i = 0; i < arg.length; i++) {
-                if (!type.check(arg[i])) {
-                    _toss(msg, expected, type.operator, arg, type.actual);
-                }
-            }
-        };
-    });
-
-    /* re-export built-in assertions */
-    Object.keys(assert).forEach(function (k) {
-        if (k === 'AssertionError') {
-            out[k] = assert[k];
-            return;
-        }
-        if (ndebug) {
-            out[k] = noop;
-            return;
-        }
-        out[k] = assert[k];
-    });
-
-    /* export ourselves (for unit tests _only_) */
-    out._setExports = _setExports;
-
-    return out;
+    return resolved;
 }
 
-module.exports = _setExports(process.env.NODE_NDEBUG);
+function resolveCommand(parsed) {
+    return resolveCommandAttempt(parsed) || resolveCommandAttempt(parsed, true);
+}
+
+module.exports = resolveCommand;
 
 
 /***/ }),
 /* 490 */,
 /* 491 */,
-/* 492 */,
+/* 492 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+
+var util = __webpack_require__(949);
+
+var DATE = /^(\d\d\d\d)-(\d\d)-(\d\d)$/;
+var DAYS = [0,31,28,31,30,31,30,31,31,30,31,30,31];
+var TIME = /^(\d\d):(\d\d):(\d\d)(\.\d+)?(z|[+-]\d\d:\d\d)?$/i;
+var HOSTNAME = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[-0-9a-z]{0,61}[0-9a-z])?)*$/i;
+var URI = /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)(?:\?(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i;
+var URIREF = /^(?:[a-z][a-z0-9+\-.]*:)?(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'"()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*)?(?:\?(?:[a-z0-9\-._~!$&'"()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'"()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i;
+// uri-template: https://tools.ietf.org/html/rfc6570
+var URITEMPLATE = /^(?:(?:[^\x00-\x20"'<>%\\^`{|}]|%[0-9a-f]{2})|\{[+#./;?&=,!@|]?(?:[a-z0-9_]|%[0-9a-f]{2})+(?::[1-9][0-9]{0,3}|\*)?(?:,(?:[a-z0-9_]|%[0-9a-f]{2})+(?::[1-9][0-9]{0,3}|\*)?)*\})*$/i;
+// For the source: https://gist.github.com/dperini/729294
+// For test cases: https://mathiasbynens.be/demo/url-regex
+// @todo Delete current URL in favour of the commented out URL rule when this issue is fixed https://github.com/eslint/eslint/issues/7983.
+// var URL = /^(?:(?:https?|ftp):\/\/)(?:\S+(?::\S*)?@)?(?:(?!10(?:\.\d{1,3}){3})(?!127(?:\.\d{1,3}){3})(?!169\.254(?:\.\d{1,3}){2})(?!192\.168(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\u{00a1}-\u{ffff}0-9]+-?)*[a-z\u{00a1}-\u{ffff}0-9]+)(?:\.(?:[a-z\u{00a1}-\u{ffff}0-9]+-?)*[a-z\u{00a1}-\u{ffff}0-9]+)*(?:\.(?:[a-z\u{00a1}-\u{ffff}]{2,})))(?::\d{2,5})?(?:\/[^\s]*)?$/iu;
+var URL = /^(?:(?:http[s\u017F]?|ftp):\/\/)(?:(?:[\0-\x08\x0E-\x1F!-\x9F\xA1-\u167F\u1681-\u1FFF\u200B-\u2027\u202A-\u202E\u2030-\u205E\u2060-\u2FFF\u3001-\uD7FF\uE000-\uFEFE\uFF00-\uFFFF]|[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])+(?::(?:[\0-\x08\x0E-\x1F!-\x9F\xA1-\u167F\u1681-\u1FFF\u200B-\u2027\u202A-\u202E\u2030-\u205E\u2060-\u2FFF\u3001-\uD7FF\uE000-\uFEFE\uFF00-\uFFFF]|[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])*)?@)?(?:(?!10(?:\.[0-9]{1,3}){3})(?!127(?:\.[0-9]{1,3}){3})(?!169\.254(?:\.[0-9]{1,3}){2})(?!192\.168(?:\.[0-9]{1,3}){2})(?!172\.(?:1[6-9]|2[0-9]|3[01])(?:\.[0-9]{1,3}){2})(?:[1-9][0-9]?|1[0-9][0-9]|2[01][0-9]|22[0-3])(?:\.(?:1?[0-9]{1,2}|2[0-4][0-9]|25[0-5])){2}(?:\.(?:[1-9][0-9]?|1[0-9][0-9]|2[0-4][0-9]|25[0-4]))|(?:(?:(?:[0-9KSa-z\xA1-\uD7FF\uE000-\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])+-?)*(?:[0-9KSa-z\xA1-\uD7FF\uE000-\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])+)(?:\.(?:(?:[0-9KSa-z\xA1-\uD7FF\uE000-\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])+-?)*(?:[0-9KSa-z\xA1-\uD7FF\uE000-\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])+)*(?:\.(?:(?:[KSa-z\xA1-\uD7FF\uE000-\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]){2,})))(?::[0-9]{2,5})?(?:\/(?:[\0-\x08\x0E-\x1F!-\x9F\xA1-\u167F\u1681-\u1FFF\u200B-\u2027\u202A-\u202E\u2030-\u205E\u2060-\u2FFF\u3001-\uD7FF\uE000-\uFEFE\uFF00-\uFFFF]|[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])*)?$/i;
+var UUID = /^(?:urn:uuid:)?[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+var JSON_POINTER = /^(?:\/(?:[^~/]|~0|~1)*)*$/;
+var JSON_POINTER_URI_FRAGMENT = /^#(?:\/(?:[a-z0-9_\-.!$&'()*+,;:=@]|%[0-9a-f]{2}|~0|~1)*)*$/i;
+var RELATIVE_JSON_POINTER = /^(?:0|[1-9][0-9]*)(?:#|(?:\/(?:[^~/]|~0|~1)*)*)$/;
+
+
+module.exports = formats;
+
+function formats(mode) {
+  mode = mode == 'full' ? 'full' : 'fast';
+  return util.copy(formats[mode]);
+}
+
+
+formats.fast = {
+  // date: http://tools.ietf.org/html/rfc3339#section-5.6
+  date: /^\d\d\d\d-[0-1]\d-[0-3]\d$/,
+  // date-time: http://tools.ietf.org/html/rfc3339#section-5.6
+  time: /^(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d:\d\d)?$/i,
+  'date-time': /^\d\d\d\d-[0-1]\d-[0-3]\d[t\s](?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d:\d\d)$/i,
+  // uri: https://github.com/mafintosh/is-my-json-valid/blob/master/formats.js
+  uri: /^(?:[a-z][a-z0-9+-.]*:)(?:\/?\/)?[^\s]*$/i,
+  'uri-reference': /^(?:(?:[a-z][a-z0-9+-.]*:)?\/?\/)?(?:[^\\\s#][^\s#]*)?(?:#[^\\\s]*)?$/i,
+  'uri-template': URITEMPLATE,
+  url: URL,
+  // email (sources from jsen validator):
+  // http://stackoverflow.com/questions/201323/using-a-regular-expression-to-validate-an-email-address#answer-8829363
+  // http://www.w3.org/TR/html5/forms.html#valid-e-mail-address (search for 'willful violation')
+  email: /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i,
+  hostname: HOSTNAME,
+  // optimized https://www.safaribooksonline.com/library/view/regular-expressions-cookbook/9780596802837/ch07s16.html
+  ipv4: /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/,
+  // optimized http://stackoverflow.com/questions/53497/regular-expression-that-matches-valid-ipv6-addresses
+  ipv6: /^\s*(?:(?:(?:[0-9a-f]{1,4}:){7}(?:[0-9a-f]{1,4}|:))|(?:(?:[0-9a-f]{1,4}:){6}(?::[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(?:(?:[0-9a-f]{1,4}:){5}(?:(?:(?::[0-9a-f]{1,4}){1,2})|:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(?:(?:[0-9a-f]{1,4}:){4}(?:(?:(?::[0-9a-f]{1,4}){1,3})|(?:(?::[0-9a-f]{1,4})?:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?:(?:[0-9a-f]{1,4}:){3}(?:(?:(?::[0-9a-f]{1,4}){1,4})|(?:(?::[0-9a-f]{1,4}){0,2}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?:(?:[0-9a-f]{1,4}:){2}(?:(?:(?::[0-9a-f]{1,4}){1,5})|(?:(?::[0-9a-f]{1,4}){0,3}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?:(?:[0-9a-f]{1,4}:){1}(?:(?:(?::[0-9a-f]{1,4}){1,6})|(?:(?::[0-9a-f]{1,4}){0,4}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?::(?:(?:(?::[0-9a-f]{1,4}){1,7})|(?:(?::[0-9a-f]{1,4}){0,5}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(?:%.+)?\s*$/i,
+  regex: regex,
+  // uuid: http://tools.ietf.org/html/rfc4122
+  uuid: UUID,
+  // JSON-pointer: https://tools.ietf.org/html/rfc6901
+  // uri fragment: https://tools.ietf.org/html/rfc3986#appendix-A
+  'json-pointer': JSON_POINTER,
+  'json-pointer-uri-fragment': JSON_POINTER_URI_FRAGMENT,
+  // relative JSON-pointer: http://tools.ietf.org/html/draft-luff-relative-json-pointer-00
+  'relative-json-pointer': RELATIVE_JSON_POINTER
+};
+
+
+formats.full = {
+  date: date,
+  time: time,
+  'date-time': date_time,
+  uri: uri,
+  'uri-reference': URIREF,
+  'uri-template': URITEMPLATE,
+  url: URL,
+  email: /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i,
+  hostname: hostname,
+  ipv4: /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/,
+  ipv6: /^\s*(?:(?:(?:[0-9a-f]{1,4}:){7}(?:[0-9a-f]{1,4}|:))|(?:(?:[0-9a-f]{1,4}:){6}(?::[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(?:(?:[0-9a-f]{1,4}:){5}(?:(?:(?::[0-9a-f]{1,4}){1,2})|:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(?:(?:[0-9a-f]{1,4}:){4}(?:(?:(?::[0-9a-f]{1,4}){1,3})|(?:(?::[0-9a-f]{1,4})?:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?:(?:[0-9a-f]{1,4}:){3}(?:(?:(?::[0-9a-f]{1,4}){1,4})|(?:(?::[0-9a-f]{1,4}){0,2}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?:(?:[0-9a-f]{1,4}:){2}(?:(?:(?::[0-9a-f]{1,4}){1,5})|(?:(?::[0-9a-f]{1,4}){0,3}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?:(?:[0-9a-f]{1,4}:){1}(?:(?:(?::[0-9a-f]{1,4}){1,6})|(?:(?::[0-9a-f]{1,4}){0,4}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?::(?:(?:(?::[0-9a-f]{1,4}){1,7})|(?:(?::[0-9a-f]{1,4}){0,5}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(?:%.+)?\s*$/i,
+  regex: regex,
+  uuid: UUID,
+  'json-pointer': JSON_POINTER,
+  'json-pointer-uri-fragment': JSON_POINTER_URI_FRAGMENT,
+  'relative-json-pointer': RELATIVE_JSON_POINTER
+};
+
+
+function isLeapYear(year) {
+  // https://tools.ietf.org/html/rfc3339#appendix-C
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
+
+function date(str) {
+  // full-date from http://tools.ietf.org/html/rfc3339#section-5.6
+  var matches = str.match(DATE);
+  if (!matches) return false;
+
+  var year = +matches[1];
+  var month = +matches[2];
+  var day = +matches[3];
+
+  return month >= 1 && month <= 12 && day >= 1 &&
+          day <= (month == 2 && isLeapYear(year) ? 29 : DAYS[month]);
+}
+
+
+function time(str, full) {
+  var matches = str.match(TIME);
+  if (!matches) return false;
+
+  var hour = matches[1];
+  var minute = matches[2];
+  var second = matches[3];
+  var timeZone = matches[5];
+  return ((hour <= 23 && minute <= 59 && second <= 59) ||
+          (hour == 23 && minute == 59 && second == 60)) &&
+         (!full || timeZone);
+}
+
+
+var DATE_TIME_SEPARATOR = /t|\s/i;
+function date_time(str) {
+  // http://tools.ietf.org/html/rfc3339#section-5.6
+  var dateTime = str.split(DATE_TIME_SEPARATOR);
+  return dateTime.length == 2 && date(dateTime[0]) && time(dateTime[1], true);
+}
+
+
+function hostname(str) {
+  // https://tools.ietf.org/html/rfc1034#section-3.5
+  // https://tools.ietf.org/html/rfc1123#section-2
+  return str.length <= 255 && HOSTNAME.test(str);
+}
+
+
+var NOT_URI_FRAGMENT = /\/|:/;
+function uri(str) {
+  // http://jmrware.com/articles/2009/uri_regexp/URI_regex.html + optional protocol + required "."
+  return NOT_URI_FRAGMENT.test(str) && URI.test(str);
+}
+
+
+var Z_ANCHOR = /[^\\]\\Z/;
+function regex(str) {
+  if (Z_ANCHOR.test(str)) return false;
+  try {
+    new RegExp(str);
+    return true;
+  } catch(e) {
+    return false;
+  }
+}
+
+
+/***/ }),
 /* 493 */,
 /* 494 */,
 /* 495 */,
@@ -21148,7 +27249,7 @@ module.exports = _setExports(process.env.NODE_NDEBUG);
 
 
 var ruleModules = __webpack_require__(383)
-  , toHash = __webpack_require__(855).toHash;
+  , toHash = __webpack_require__(949).toHash;
 
 module.exports = function rules() {
   var RULES = [
@@ -21260,7 +27361,44 @@ function defer(fn)
 
 
 /***/ }),
-/* 501 */,
+/* 501 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const base_1 = __webpack_require__(142);
+const __1 = __webpack_require__(941);
+exports.WorkItemPaths = {
+    workitems: '/issues/{issueId}/timeTracking/workItems',
+    workitem: '/issues/{issueId}/timeTracking/workItems/{workItemId}'
+};
+class WorkItemEndpoint extends base_1.BaseEndpoint {
+    all(issueId, paginationOptions = {}) {
+        return this.getResourceWithFields(this.format(exports.WorkItemPaths.workitems, { issueId }), __1.WorkItemImpl, { qs: paginationOptions });
+    }
+    create(issueId, workItem) {
+        return this.postResourceWithFields(this.format(exports.WorkItemPaths.workitems, { issueId }), __1.WorkItemImpl, {
+            body: workItem
+        });
+    }
+    update(issueId, workItem) {
+        return this.postResourceWithFields(this.format(exports.WorkItemPaths.workitem, {
+            issueId, workItemId: workItem.id
+        }), __1.WorkItemImpl, {
+            body: workItem
+        });
+    }
+    delete(issueId, workItemId) {
+        return this.toPromise(this.client.delete(this.format(exports.WorkItemPaths.workitem, {
+            issueId, workItemId
+        })));
+    }
+}
+exports.WorkItemEndpoint = WorkItemEndpoint;
+
+
+/***/ }),
 /* 502 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
@@ -21268,19 +27406,19 @@ function defer(fn)
 
 module.exports = PrivateKey;
 
-var assert = __webpack_require__(489);
-var Buffer = __webpack_require__(215).Buffer;
+var assert = __webpack_require__(757);
+var Buffer = __webpack_require__(481).Buffer;
 var algs = __webpack_require__(98);
 var crypto = __webpack_require__(417);
 var Fingerprint = __webpack_require__(400);
 var Signature = __webpack_require__(575);
-var errs = __webpack_require__(753);
+var errs = __webpack_require__(570);
 var util = __webpack_require__(669);
 var utils = __webpack_require__(270);
 var dhe = __webpack_require__(290);
 var generateECDSA = dhe.generateECDSA;
 var generateED25519 = dhe.generateED25519;
-var edCompat = __webpack_require__(363);
+var edCompat = __webpack_require__(1);
 var nacl = __webpack_require__(196);
 
 var Key = __webpack_require__(852);
@@ -21520,7 +27658,58 @@ PrivateKey._oldVersionDetect = function (obj) {
 /* 507 */,
 /* 508 */,
 /* 509 */,
-/* 510 */,
+/* 510 */
+/***/ (function(module) {
+
+module.exports = addHook
+
+function addHook (state, kind, name, hook) {
+  var orig = hook
+  if (!state.registry[name]) {
+    state.registry[name] = []
+  }
+
+  if (kind === 'before') {
+    hook = function (method, options) {
+      return Promise.resolve()
+        .then(orig.bind(null, options))
+        .then(method.bind(null, options))
+    }
+  }
+
+  if (kind === 'after') {
+    hook = function (method, options) {
+      var result
+      return Promise.resolve()
+        .then(method.bind(null, options))
+        .then(function (result_) {
+          result = result_
+          return orig(result, options)
+        })
+        .then(function () {
+          return result
+        })
+    }
+  }
+
+  if (kind === 'error') {
+    hook = function (method, options) {
+      return Promise.resolve()
+        .then(method.bind(null, options))
+        .catch(function (error) {
+          return orig(error, options)
+        })
+    }
+  }
+
+  state.registry[name].push({
+    hook: hook,
+    orig: orig
+  })
+}
+
+
+/***/ }),
 /* 511 */,
 /* 512 */
 /***/ (function(module) {
@@ -21722,13 +27911,156 @@ exports.getPublicSuffix = getPublicSuffix;
 module.exports = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"http://json-schema.org/draft-07/schema#","title":"Core schema meta-schema","definitions":{"schemaArray":{"type":"array","minItems":1,"items":{"$ref":"#"}},"nonNegativeInteger":{"type":"integer","minimum":0},"nonNegativeIntegerDefault0":{"allOf":[{"$ref":"#/definitions/nonNegativeInteger"},{"default":0}]},"simpleTypes":{"enum":["array","boolean","integer","null","number","object","string"]},"stringArray":{"type":"array","items":{"type":"string"},"uniqueItems":true,"default":[]}},"type":["object","boolean"],"properties":{"$id":{"type":"string","format":"uri-reference"},"$schema":{"type":"string","format":"uri"},"$ref":{"type":"string","format":"uri-reference"},"$comment":{"type":"string"},"title":{"type":"string"},"description":{"type":"string"},"default":true,"readOnly":{"type":"boolean","default":false},"examples":{"type":"array","items":true},"multipleOf":{"type":"number","exclusiveMinimum":0},"maximum":{"type":"number"},"exclusiveMaximum":{"type":"number"},"minimum":{"type":"number"},"exclusiveMinimum":{"type":"number"},"maxLength":{"$ref":"#/definitions/nonNegativeInteger"},"minLength":{"$ref":"#/definitions/nonNegativeIntegerDefault0"},"pattern":{"type":"string","format":"regex"},"additionalItems":{"$ref":"#"},"items":{"anyOf":[{"$ref":"#"},{"$ref":"#/definitions/schemaArray"}],"default":true},"maxItems":{"$ref":"#/definitions/nonNegativeInteger"},"minItems":{"$ref":"#/definitions/nonNegativeIntegerDefault0"},"uniqueItems":{"type":"boolean","default":false},"contains":{"$ref":"#"},"maxProperties":{"$ref":"#/definitions/nonNegativeInteger"},"minProperties":{"$ref":"#/definitions/nonNegativeIntegerDefault0"},"required":{"$ref":"#/definitions/stringArray"},"additionalProperties":{"$ref":"#"},"definitions":{"type":"object","additionalProperties":{"$ref":"#"},"default":{}},"properties":{"type":"object","additionalProperties":{"$ref":"#"},"default":{}},"patternProperties":{"type":"object","additionalProperties":{"$ref":"#"},"propertyNames":{"format":"regex"},"default":{}},"dependencies":{"type":"object","additionalProperties":{"anyOf":[{"$ref":"#"},{"$ref":"#/definitions/stringArray"}]}},"propertyNames":{"$ref":"#"},"const":true,"enum":{"type":"array","items":true,"minItems":1,"uniqueItems":true},"type":{"anyOf":[{"$ref":"#/definitions/simpleTypes"},{"type":"array","items":{"$ref":"#/definitions/simpleTypes"},"minItems":1,"uniqueItems":true}]},"format":{"type":"string"},"contentMediaType":{"type":"string"},"contentEncoding":{"type":"string"},"if":{"$ref":"#"},"then":{"$ref":"#"},"else":{"$ref":"#"},"allOf":{"$ref":"#/definitions/schemaArray"},"anyOf":{"$ref":"#/definitions/schemaArray"},"oneOf":{"$ref":"#/definitions/schemaArray"},"not":{"$ref":"#"}},"default":true};
 
 /***/ }),
-/* 523 */,
-/* 524 */,
+/* 523 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+var register = __webpack_require__(363)
+var addHook = __webpack_require__(510)
+var removeHook = __webpack_require__(763)
+
+// bind with array of arguments: https://stackoverflow.com/a/21792913
+var bind = Function.bind
+var bindable = bind.bind(bind)
+
+function bindApi (hook, state, name) {
+  var removeHookRef = bindable(removeHook, null).apply(null, name ? [state, name] : [state])
+  hook.api = { remove: removeHookRef }
+  hook.remove = removeHookRef
+
+  ;['before', 'error', 'after', 'wrap'].forEach(function (kind) {
+    var args = name ? [state, kind, name] : [state, kind]
+    hook[kind] = hook.api[kind] = bindable(addHook, null).apply(null, args)
+  })
+}
+
+function HookSingular () {
+  var singularHookName = 'h'
+  var singularHookState = {
+    registry: {}
+  }
+  var singularHook = register.bind(null, singularHookState, singularHookName)
+  bindApi(singularHook, singularHookState, singularHookName)
+  return singularHook
+}
+
+function HookCollection () {
+  var state = {
+    registry: {}
+  }
+
+  var hook = register.bind(null, state)
+  bindApi(hook, state)
+
+  return hook
+}
+
+var collectionHookDeprecationMessageDisplayed = false
+function Hook () {
+  if (!collectionHookDeprecationMessageDisplayed) {
+    console.warn('[before-after-hook]: "Hook()" repurposing warning, use "Hook.Collection()". Read more: https://git.io/upgrade-before-after-hook-to-1.4')
+    collectionHookDeprecationMessageDisplayed = true
+  }
+  return HookCollection()
+}
+
+Hook.Singular = HookSingular.bind()
+Hook.Collection = HookCollection.bind()
+
+module.exports = Hook
+// expose constructors as a named property for TypeScript
+module.exports.Hook = Hook
+module.exports.Singular = Hook.Singular
+module.exports.Collection = Hook.Collection
+
+
+/***/ }),
+/* 524 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const project_1 = __webpack_require__(527);
+const user_1 = __webpack_require__(406);
+const issueTag_1 = __webpack_require__(164);
+const issueLink_1 = __webpack_require__(418);
+const issueCustomField_1 = __webpack_require__(404);
+const comment_1 = __webpack_require__(160);
+class ReducedIssueImpl {
+    constructor() {
+        this.id = '';
+        this.numberInProject = 0;
+        this.created = 0;
+        this.updated = 0;
+        this.project = new project_1.ReducedProjectImpl();
+        this.summary = '';
+        this.description = '';
+    }
+}
+exports.ReducedIssueImpl = ReducedIssueImpl;
+class IssueImpl extends ReducedIssueImpl {
+    constructor() {
+        super(...arguments);
+        this.reporter = new user_1.ReducedUserImpl();
+        this.updater = new user_1.ReducedUserImpl();
+        this.usesMarkdown = false;
+        this.fields = [new issueCustomField_1.IssueCustomFieldImpl()];
+        this.isDraft = false;
+        this.tags = [new issueTag_1.IssueTagImpl()];
+        this.links = [new issueLink_1.IssueLinkImpl()];
+        this.comments = [new comment_1.IssueCommentImpl()];
+    }
+}
+exports.IssueImpl = IssueImpl;
+
+
+/***/ }),
 /* 525 */,
 /* 526 */,
-/* 527 */,
+/* 527 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const user_1 = __webpack_require__(406);
+const projectCustomField_1 = __webpack_require__(640);
+class ReducedProjectImpl {
+    constructor() {
+        this.id = '';
+        this.name = '';
+        this.shortName = '';
+        this.description = '';
+        this.archived = false;
+    }
+}
+exports.ReducedProjectImpl = ReducedProjectImpl;
+class ProjectImpl extends ReducedProjectImpl {
+    constructor() {
+        super(...arguments);
+        this.createdBy = new user_1.ReducedUserImpl();
+        this.fields = [new projectCustomField_1.ProjectCustomFieldImpl()];
+        this.fromEmail = '';
+        this.hubResourceId = '';
+        this.iconUrl = '';
+        this.timeTrackingEnabled = false;
+        this.leader = new user_1.ReducedUserImpl();
+    }
+}
+exports.ProjectImpl = ProjectImpl;
+
+
+/***/ }),
 /* 528 */,
-/* 529 */,
+/* 529 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+const factory = __webpack_require__(47);
+
+module.exports = factory();
+
+
+/***/ }),
 /* 530 */
 /***/ (function(__unusedmodule, exports, __webpack_require__) {
 
@@ -21917,7 +28249,21 @@ MemoryCookieStore.prototype.getAllCookies = function(cb) {
 /* 533 */,
 /* 534 */,
 /* 535 */,
-/* 536 */,
+/* 536 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = hasFirstPage
+
+const deprecate = __webpack_require__(370)
+const getPageLinks = __webpack_require__(577)
+
+function hasFirstPage (link) {
+  deprecate(`octokit.hasFirstPage() – You can use octokit.paginate or async iterators instead: https://github.com/octokit/rest.js#pagination.`)
+  return getPageLinks(link).first
+}
+
+
+/***/ }),
 /* 537 */,
 /* 538 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
@@ -21937,8 +28283,8 @@ module.exports = {
 	algToKeyType: algToKeyType
 };
 
-var assert = __webpack_require__(489);
-var Buffer = __webpack_require__(215).Buffer;
+var assert = __webpack_require__(757);
+var Buffer = __webpack_require__(481).Buffer;
 var algs = __webpack_require__(98);
 var utils = __webpack_require__(270);
 var Key = __webpack_require__(852);
@@ -22091,7 +28437,399 @@ function write(key, options) {
 
 
 /***/ }),
-/* 539 */,
+/* 539 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const url = __webpack_require__(835);
+const http = __webpack_require__(605);
+const https = __webpack_require__(211);
+const pm = __webpack_require__(950);
+let tunnel;
+var HttpCodes;
+(function (HttpCodes) {
+    HttpCodes[HttpCodes["OK"] = 200] = "OK";
+    HttpCodes[HttpCodes["MultipleChoices"] = 300] = "MultipleChoices";
+    HttpCodes[HttpCodes["MovedPermanently"] = 301] = "MovedPermanently";
+    HttpCodes[HttpCodes["ResourceMoved"] = 302] = "ResourceMoved";
+    HttpCodes[HttpCodes["SeeOther"] = 303] = "SeeOther";
+    HttpCodes[HttpCodes["NotModified"] = 304] = "NotModified";
+    HttpCodes[HttpCodes["UseProxy"] = 305] = "UseProxy";
+    HttpCodes[HttpCodes["SwitchProxy"] = 306] = "SwitchProxy";
+    HttpCodes[HttpCodes["TemporaryRedirect"] = 307] = "TemporaryRedirect";
+    HttpCodes[HttpCodes["PermanentRedirect"] = 308] = "PermanentRedirect";
+    HttpCodes[HttpCodes["BadRequest"] = 400] = "BadRequest";
+    HttpCodes[HttpCodes["Unauthorized"] = 401] = "Unauthorized";
+    HttpCodes[HttpCodes["PaymentRequired"] = 402] = "PaymentRequired";
+    HttpCodes[HttpCodes["Forbidden"] = 403] = "Forbidden";
+    HttpCodes[HttpCodes["NotFound"] = 404] = "NotFound";
+    HttpCodes[HttpCodes["MethodNotAllowed"] = 405] = "MethodNotAllowed";
+    HttpCodes[HttpCodes["NotAcceptable"] = 406] = "NotAcceptable";
+    HttpCodes[HttpCodes["ProxyAuthenticationRequired"] = 407] = "ProxyAuthenticationRequired";
+    HttpCodes[HttpCodes["RequestTimeout"] = 408] = "RequestTimeout";
+    HttpCodes[HttpCodes["Conflict"] = 409] = "Conflict";
+    HttpCodes[HttpCodes["Gone"] = 410] = "Gone";
+    HttpCodes[HttpCodes["InternalServerError"] = 500] = "InternalServerError";
+    HttpCodes[HttpCodes["NotImplemented"] = 501] = "NotImplemented";
+    HttpCodes[HttpCodes["BadGateway"] = 502] = "BadGateway";
+    HttpCodes[HttpCodes["ServiceUnavailable"] = 503] = "ServiceUnavailable";
+    HttpCodes[HttpCodes["GatewayTimeout"] = 504] = "GatewayTimeout";
+})(HttpCodes = exports.HttpCodes || (exports.HttpCodes = {}));
+/**
+ * Returns the proxy URL, depending upon the supplied url and proxy environment variables.
+ * @param serverUrl  The server URL where the request will be sent. For example, https://api.github.com
+ */
+function getProxyUrl(serverUrl) {
+    let proxyUrl = pm.getProxyUrl(url.parse(serverUrl));
+    return proxyUrl ? proxyUrl.href : '';
+}
+exports.getProxyUrl = getProxyUrl;
+const HttpRedirectCodes = [HttpCodes.MovedPermanently, HttpCodes.ResourceMoved, HttpCodes.SeeOther, HttpCodes.TemporaryRedirect, HttpCodes.PermanentRedirect];
+const HttpResponseRetryCodes = [HttpCodes.BadGateway, HttpCodes.ServiceUnavailable, HttpCodes.GatewayTimeout];
+const RetryableHttpVerbs = ['OPTIONS', 'GET', 'DELETE', 'HEAD'];
+const ExponentialBackoffCeiling = 10;
+const ExponentialBackoffTimeSlice = 5;
+class HttpClientResponse {
+    constructor(message) {
+        this.message = message;
+    }
+    readBody() {
+        return new Promise(async (resolve, reject) => {
+            let output = Buffer.alloc(0);
+            this.message.on('data', (chunk) => {
+                output = Buffer.concat([output, chunk]);
+            });
+            this.message.on('end', () => {
+                resolve(output.toString());
+            });
+        });
+    }
+}
+exports.HttpClientResponse = HttpClientResponse;
+function isHttps(requestUrl) {
+    let parsedUrl = url.parse(requestUrl);
+    return parsedUrl.protocol === 'https:';
+}
+exports.isHttps = isHttps;
+class HttpClient {
+    constructor(userAgent, handlers, requestOptions) {
+        this._ignoreSslError = false;
+        this._allowRedirects = true;
+        this._allowRedirectDowngrade = false;
+        this._maxRedirects = 50;
+        this._allowRetries = false;
+        this._maxRetries = 1;
+        this._keepAlive = false;
+        this._disposed = false;
+        this.userAgent = userAgent;
+        this.handlers = handlers || [];
+        this.requestOptions = requestOptions;
+        if (requestOptions) {
+            if (requestOptions.ignoreSslError != null) {
+                this._ignoreSslError = requestOptions.ignoreSslError;
+            }
+            this._socketTimeout = requestOptions.socketTimeout;
+            if (requestOptions.allowRedirects != null) {
+                this._allowRedirects = requestOptions.allowRedirects;
+            }
+            if (requestOptions.allowRedirectDowngrade != null) {
+                this._allowRedirectDowngrade = requestOptions.allowRedirectDowngrade;
+            }
+            if (requestOptions.maxRedirects != null) {
+                this._maxRedirects = Math.max(requestOptions.maxRedirects, 0);
+            }
+            if (requestOptions.keepAlive != null) {
+                this._keepAlive = requestOptions.keepAlive;
+            }
+            if (requestOptions.allowRetries != null) {
+                this._allowRetries = requestOptions.allowRetries;
+            }
+            if (requestOptions.maxRetries != null) {
+                this._maxRetries = requestOptions.maxRetries;
+            }
+        }
+    }
+    options(requestUrl, additionalHeaders) {
+        return this.request('OPTIONS', requestUrl, null, additionalHeaders || {});
+    }
+    get(requestUrl, additionalHeaders) {
+        return this.request('GET', requestUrl, null, additionalHeaders || {});
+    }
+    del(requestUrl, additionalHeaders) {
+        return this.request('DELETE', requestUrl, null, additionalHeaders || {});
+    }
+    post(requestUrl, data, additionalHeaders) {
+        return this.request('POST', requestUrl, data, additionalHeaders || {});
+    }
+    patch(requestUrl, data, additionalHeaders) {
+        return this.request('PATCH', requestUrl, data, additionalHeaders || {});
+    }
+    put(requestUrl, data, additionalHeaders) {
+        return this.request('PUT', requestUrl, data, additionalHeaders || {});
+    }
+    head(requestUrl, additionalHeaders) {
+        return this.request('HEAD', requestUrl, null, additionalHeaders || {});
+    }
+    sendStream(verb, requestUrl, stream, additionalHeaders) {
+        return this.request(verb, requestUrl, stream, additionalHeaders);
+    }
+    /**
+     * Makes a raw http request.
+     * All other methods such as get, post, patch, and request ultimately call this.
+     * Prefer get, del, post and patch
+     */
+    async request(verb, requestUrl, data, headers) {
+        if (this._disposed) {
+            throw new Error("Client has already been disposed.");
+        }
+        let parsedUrl = url.parse(requestUrl);
+        let info = this._prepareRequest(verb, parsedUrl, headers);
+        // Only perform retries on reads since writes may not be idempotent.
+        let maxTries = (this._allowRetries && RetryableHttpVerbs.indexOf(verb) != -1) ? this._maxRetries + 1 : 1;
+        let numTries = 0;
+        let response;
+        while (numTries < maxTries) {
+            response = await this.requestRaw(info, data);
+            // Check if it's an authentication challenge
+            if (response && response.message && response.message.statusCode === HttpCodes.Unauthorized) {
+                let authenticationHandler;
+                for (let i = 0; i < this.handlers.length; i++) {
+                    if (this.handlers[i].canHandleAuthentication(response)) {
+                        authenticationHandler = this.handlers[i];
+                        break;
+                    }
+                }
+                if (authenticationHandler) {
+                    return authenticationHandler.handleAuthentication(this, info, data);
+                }
+                else {
+                    // We have received an unauthorized response but have no handlers to handle it.
+                    // Let the response return to the caller.
+                    return response;
+                }
+            }
+            let redirectsRemaining = this._maxRedirects;
+            while (HttpRedirectCodes.indexOf(response.message.statusCode) != -1
+                && this._allowRedirects
+                && redirectsRemaining > 0) {
+                const redirectUrl = response.message.headers["location"];
+                if (!redirectUrl) {
+                    // if there's no location to redirect to, we won't
+                    break;
+                }
+                let parsedRedirectUrl = url.parse(redirectUrl);
+                if (parsedUrl.protocol == 'https:' && parsedUrl.protocol != parsedRedirectUrl.protocol && !this._allowRedirectDowngrade) {
+                    throw new Error("Redirect from HTTPS to HTTP protocol. This downgrade is not allowed for security reasons. If you want to allow this behavior, set the allowRedirectDowngrade option to true.");
+                }
+                // we need to finish reading the response before reassigning response
+                // which will leak the open socket.
+                await response.readBody();
+                // let's make the request with the new redirectUrl
+                info = this._prepareRequest(verb, parsedRedirectUrl, headers);
+                response = await this.requestRaw(info, data);
+                redirectsRemaining--;
+            }
+            if (HttpResponseRetryCodes.indexOf(response.message.statusCode) == -1) {
+                // If not a retry code, return immediately instead of retrying
+                return response;
+            }
+            numTries += 1;
+            if (numTries < maxTries) {
+                await response.readBody();
+                await this._performExponentialBackoff(numTries);
+            }
+        }
+        return response;
+    }
+    /**
+     * Needs to be called if keepAlive is set to true in request options.
+     */
+    dispose() {
+        if (this._agent) {
+            this._agent.destroy();
+        }
+        this._disposed = true;
+    }
+    /**
+     * Raw request.
+     * @param info
+     * @param data
+     */
+    requestRaw(info, data) {
+        return new Promise((resolve, reject) => {
+            let callbackForResult = function (err, res) {
+                if (err) {
+                    reject(err);
+                }
+                resolve(res);
+            };
+            this.requestRawWithCallback(info, data, callbackForResult);
+        });
+    }
+    /**
+     * Raw request with callback.
+     * @param info
+     * @param data
+     * @param onResult
+     */
+    requestRawWithCallback(info, data, onResult) {
+        let socket;
+        if (typeof (data) === 'string') {
+            info.options.headers["Content-Length"] = Buffer.byteLength(data, 'utf8');
+        }
+        let callbackCalled = false;
+        let handleResult = (err, res) => {
+            if (!callbackCalled) {
+                callbackCalled = true;
+                onResult(err, res);
+            }
+        };
+        let req = info.httpModule.request(info.options, (msg) => {
+            let res = new HttpClientResponse(msg);
+            handleResult(null, res);
+        });
+        req.on('socket', (sock) => {
+            socket = sock;
+        });
+        // If we ever get disconnected, we want the socket to timeout eventually
+        req.setTimeout(this._socketTimeout || 3 * 60000, () => {
+            if (socket) {
+                socket.end();
+            }
+            handleResult(new Error('Request timeout: ' + info.options.path), null);
+        });
+        req.on('error', function (err) {
+            // err has statusCode property
+            // res should have headers
+            handleResult(err, null);
+        });
+        if (data && typeof (data) === 'string') {
+            req.write(data, 'utf8');
+        }
+        if (data && typeof (data) !== 'string') {
+            data.on('close', function () {
+                req.end();
+            });
+            data.pipe(req);
+        }
+        else {
+            req.end();
+        }
+    }
+    /**
+     * Gets an http agent. This function is useful when you need an http agent that handles
+     * routing through a proxy server - depending upon the url and proxy environment variables.
+     * @param serverUrl  The server URL where the request will be sent. For example, https://api.github.com
+     */
+    getAgent(serverUrl) {
+        let parsedUrl = url.parse(serverUrl);
+        return this._getAgent(parsedUrl);
+    }
+    _prepareRequest(method, requestUrl, headers) {
+        const info = {};
+        info.parsedUrl = requestUrl;
+        const usingSsl = info.parsedUrl.protocol === 'https:';
+        info.httpModule = usingSsl ? https : http;
+        const defaultPort = usingSsl ? 443 : 80;
+        info.options = {};
+        info.options.host = info.parsedUrl.hostname;
+        info.options.port = info.parsedUrl.port ? parseInt(info.parsedUrl.port) : defaultPort;
+        info.options.path = (info.parsedUrl.pathname || '') + (info.parsedUrl.search || '');
+        info.options.method = method;
+        info.options.headers = this._mergeHeaders(headers);
+        if (this.userAgent != null) {
+            info.options.headers["user-agent"] = this.userAgent;
+        }
+        info.options.agent = this._getAgent(info.parsedUrl);
+        // gives handlers an opportunity to participate
+        if (this.handlers) {
+            this.handlers.forEach((handler) => {
+                handler.prepareRequest(info.options);
+            });
+        }
+        return info;
+    }
+    _mergeHeaders(headers) {
+        const lowercaseKeys = obj => Object.keys(obj).reduce((c, k) => (c[k.toLowerCase()] = obj[k], c), {});
+        if (this.requestOptions && this.requestOptions.headers) {
+            return Object.assign({}, lowercaseKeys(this.requestOptions.headers), lowercaseKeys(headers));
+        }
+        return lowercaseKeys(headers || {});
+    }
+    _getAgent(parsedUrl) {
+        let agent;
+        let proxyUrl = pm.getProxyUrl(parsedUrl);
+        let useProxy = proxyUrl && proxyUrl.hostname;
+        if (this._keepAlive && useProxy) {
+            agent = this._proxyAgent;
+        }
+        if (this._keepAlive && !useProxy) {
+            agent = this._agent;
+        }
+        // if agent is already assigned use that agent.
+        if (!!agent) {
+            return agent;
+        }
+        const usingSsl = parsedUrl.protocol === 'https:';
+        let maxSockets = 100;
+        if (!!this.requestOptions) {
+            maxSockets = this.requestOptions.maxSockets || http.globalAgent.maxSockets;
+        }
+        if (useProxy) {
+            // If using proxy, need tunnel
+            if (!tunnel) {
+                tunnel = __webpack_require__(856);
+            }
+            const agentOptions = {
+                maxSockets: maxSockets,
+                keepAlive: this._keepAlive,
+                proxy: {
+                    proxyAuth: proxyUrl.auth,
+                    host: proxyUrl.hostname,
+                    port: proxyUrl.port
+                },
+            };
+            let tunnelAgent;
+            const overHttps = proxyUrl.protocol === 'https:';
+            if (usingSsl) {
+                tunnelAgent = overHttps ? tunnel.httpsOverHttps : tunnel.httpsOverHttp;
+            }
+            else {
+                tunnelAgent = overHttps ? tunnel.httpOverHttps : tunnel.httpOverHttp;
+            }
+            agent = tunnelAgent(agentOptions);
+            this._proxyAgent = agent;
+        }
+        // if reusing agent across request and tunneling agent isn't assigned create a new agent
+        if (this._keepAlive && !agent) {
+            const options = { keepAlive: this._keepAlive, maxSockets: maxSockets };
+            agent = usingSsl ? new https.Agent(options) : new http.Agent(options);
+            this._agent = agent;
+        }
+        // if not using private agent and tunnel agent isn't setup then use global agent
+        if (!agent) {
+            agent = usingSsl ? https.globalAgent : http.globalAgent;
+        }
+        if (usingSsl && this._ignoreSslError) {
+            // we don't want to set NODE_TLS_REJECT_UNAUTHORIZED=0 since that will affect request for entire process
+            // http.RequestOptions doesn't expose a way to modify RequestOptions.agent.options
+            // we have to cast it to any and change it directly
+            agent.options = Object.assign(agent.options || {}, { rejectUnauthorized: false });
+        }
+        return agent;
+    }
+    _performExponentialBackoff(retryNumber) {
+        retryNumber = Math.min(ExponentialBackoffCeiling, retryNumber);
+        const ms = ExponentialBackoffTimeSlice * Math.pow(2, retryNumber);
+        return new Promise(resolve => setTimeout(() => resolve(), ms));
+    }
+}
+exports.HttpClient = HttpClient;
+
+
+/***/ }),
 /* 540 */,
 /* 541 */,
 /* 542 */
@@ -22380,10 +29118,117 @@ CombinedStream.prototype._emitError = function(err) {
 
 
 /***/ }),
-/* 548 */,
+/* 548 */
+/***/ (function(module) {
+
+"use strict";
+
+
+/*!
+ * isobject <https://github.com/jonschlinkert/isobject>
+ *
+ * Copyright (c) 2014-2017, Jon Schlinkert.
+ * Released under the MIT License.
+ */
+
+function isObject(val) {
+  return val != null && typeof val === 'object' && Array.isArray(val) === false;
+}
+
+/*!
+ * is-plain-object <https://github.com/jonschlinkert/is-plain-object>
+ *
+ * Copyright (c) 2014-2017, Jon Schlinkert.
+ * Released under the MIT License.
+ */
+
+function isObjectObject(o) {
+  return isObject(o) === true
+    && Object.prototype.toString.call(o) === '[object Object]';
+}
+
+function isPlainObject(o) {
+  var ctor,prot;
+
+  if (isObjectObject(o) === false) return false;
+
+  // If has modified constructor
+  ctor = o.constructor;
+  if (typeof ctor !== 'function') return false;
+
+  // If has modified prototype
+  prot = ctor.prototype;
+  if (isObjectObject(prot) === false) return false;
+
+  // If constructor does not have an Object-specific method
+  if (prot.hasOwnProperty('isPrototypeOf') === false) {
+    return false;
+  }
+
+  // Most likely a plain Object
+  return true;
+}
+
+module.exports = isPlainObject;
+
+
+/***/ }),
 /* 549 */,
-/* 550 */,
-/* 551 */,
+/* 550 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = getNextPage
+
+const getPage = __webpack_require__(265)
+
+function getNextPage (octokit, link, headers) {
+  return getPage(octokit, link, 'next', headers)
+}
+
+
+/***/ }),
+/* 551 */
+/***/ (function(module) {
+
+// Generated by CoffeeScript 1.12.2
+(function() {
+  var getNanoSeconds, hrtime, loadTime, moduleLoadTime, nodeLoadTime, upTime;
+
+  if ((typeof performance !== "undefined" && performance !== null) && performance.now) {
+    module.exports = function() {
+      return performance.now();
+    };
+  } else if ((typeof process !== "undefined" && process !== null) && process.hrtime) {
+    module.exports = function() {
+      return (getNanoSeconds() - nodeLoadTime) / 1e6;
+    };
+    hrtime = process.hrtime;
+    getNanoSeconds = function() {
+      var hr;
+      hr = hrtime();
+      return hr[0] * 1e9 + hr[1];
+    };
+    moduleLoadTime = getNanoSeconds();
+    upTime = process.uptime() * 1e9;
+    nodeLoadTime = moduleLoadTime - upTime;
+  } else if (Date.now) {
+    module.exports = function() {
+      return Date.now() - loadTime;
+    };
+    loadTime = Date.now();
+  } else {
+    module.exports = function() {
+      return new Date().getTime() - loadTime;
+    };
+    loadTime = new Date().getTime();
+  }
+
+}).call(this);
+
+//# sourceMappingURL=performance-now.js.map
+
+
+/***/ }),
 /* 552 */
 /***/ (function(__unusedmodule, exports, __webpack_require__) {
 
@@ -22723,7 +29568,21 @@ exports.Auth = Auth
 /* 555 */,
 /* 556 */,
 /* 557 */,
-/* 558 */,
+/* 558 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = hasPreviousPage
+
+const deprecate = __webpack_require__(370)
+const getPageLinks = __webpack_require__(577)
+
+function hasPreviousPage (link) {
+  deprecate(`octokit.hasPreviousPage() – You can use octokit.paginate or async iterators instead: https://github.com/octokit/rest.js#pagination.`)
+  return getPageLinks(link).prev
+}
+
+
+/***/ }),
 /* 559 */,
 /* 560 */
 /***/ (function(module) {
@@ -22811,7 +29670,19 @@ module.exports = function generate__limitProperties(it, $keyword, $ruleType) {
 /***/ }),
 /* 561 */,
 /* 562 */,
-/* 563 */,
+/* 563 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = getPreviousPage
+
+const getPage = __webpack_require__(265)
+
+function getPreviousPage (octokit, link, headers) {
+  return getPage(octokit, link, 'prev', headers)
+}
+
+
+/***/ }),
 /* 564 */,
 /* 565 */,
 /* 566 */
@@ -22850,9 +29721,229 @@ function clean(key)
 
 /***/ }),
 /* 567 */,
-/* 568 */,
+/* 568 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+
+const path = __webpack_require__(622);
+const niceTry = __webpack_require__(948);
+const resolveCommand = __webpack_require__(489);
+const escape = __webpack_require__(462);
+const readShebang = __webpack_require__(389);
+const semver = __webpack_require__(280);
+
+const isWin = process.platform === 'win32';
+const isExecutableRegExp = /\.(?:com|exe)$/i;
+const isCmdShimRegExp = /node_modules[\\/].bin[\\/][^\\/]+\.cmd$/i;
+
+// `options.shell` is supported in Node ^4.8.0, ^5.7.0 and >= 6.0.0
+const supportsShellOption = niceTry(() => semver.satisfies(process.version, '^4.8.0 || ^5.7.0 || >= 6.0.0', true)) || false;
+
+function detectShebang(parsed) {
+    parsed.file = resolveCommand(parsed);
+
+    const shebang = parsed.file && readShebang(parsed.file);
+
+    if (shebang) {
+        parsed.args.unshift(parsed.file);
+        parsed.command = shebang;
+
+        return resolveCommand(parsed);
+    }
+
+    return parsed.file;
+}
+
+function parseNonShell(parsed) {
+    if (!isWin) {
+        return parsed;
+    }
+
+    // Detect & add support for shebangs
+    const commandFile = detectShebang(parsed);
+
+    // We don't need a shell if the command filename is an executable
+    const needsShell = !isExecutableRegExp.test(commandFile);
+
+    // If a shell is required, use cmd.exe and take care of escaping everything correctly
+    // Note that `forceShell` is an hidden option used only in tests
+    if (parsed.options.forceShell || needsShell) {
+        // Need to double escape meta chars if the command is a cmd-shim located in `node_modules/.bin/`
+        // The cmd-shim simply calls execute the package bin file with NodeJS, proxying any argument
+        // Because the escape of metachars with ^ gets interpreted when the cmd.exe is first called,
+        // we need to double escape them
+        const needsDoubleEscapeMetaChars = isCmdShimRegExp.test(commandFile);
+
+        // Normalize posix paths into OS compatible paths (e.g.: foo/bar -> foo\bar)
+        // This is necessary otherwise it will always fail with ENOENT in those cases
+        parsed.command = path.normalize(parsed.command);
+
+        // Escape command & arguments
+        parsed.command = escape.command(parsed.command);
+        parsed.args = parsed.args.map((arg) => escape.argument(arg, needsDoubleEscapeMetaChars));
+
+        const shellCommand = [parsed.command].concat(parsed.args).join(' ');
+
+        parsed.args = ['/d', '/s', '/c', `"${shellCommand}"`];
+        parsed.command = process.env.comspec || 'cmd.exe';
+        parsed.options.windowsVerbatimArguments = true; // Tell node's spawn that the arguments are already escaped
+    }
+
+    return parsed;
+}
+
+function parseShell(parsed) {
+    // If node supports the shell option, there's no need to mimic its behavior
+    if (supportsShellOption) {
+        return parsed;
+    }
+
+    // Mimic node shell option
+    // See https://github.com/nodejs/node/blob/b9f6a2dc059a1062776133f3d4fd848c4da7d150/lib/child_process.js#L335
+    const shellCommand = [parsed.command].concat(parsed.args).join(' ');
+
+    if (isWin) {
+        parsed.command = typeof parsed.options.shell === 'string' ? parsed.options.shell : process.env.comspec || 'cmd.exe';
+        parsed.args = ['/d', '/s', '/c', `"${shellCommand}"`];
+        parsed.options.windowsVerbatimArguments = true; // Tell node's spawn that the arguments are already escaped
+    } else {
+        if (typeof parsed.options.shell === 'string') {
+            parsed.command = parsed.options.shell;
+        } else if (process.platform === 'android') {
+            parsed.command = '/system/bin/sh';
+        } else {
+            parsed.command = '/bin/sh';
+        }
+
+        parsed.args = ['-c', shellCommand];
+    }
+
+    return parsed;
+}
+
+function parse(command, args, options) {
+    // Normalize arguments, similar to nodejs
+    if (args && !Array.isArray(args)) {
+        options = args;
+        args = null;
+    }
+
+    args = args ? args.slice(0) : []; // Clone array to avoid changing the original
+    options = Object.assign({}, options); // Clone object to avoid changing the original
+
+    // Build our parsed object
+    const parsed = {
+        command,
+        args,
+        options,
+        file: undefined,
+        original: {
+            command,
+            args,
+        },
+    };
+
+    // Delegate further parsing to shell or non-shell
+    return options.shell ? parseShell(parsed) : parseNonShell(parsed);
+}
+
+module.exports = parse;
+
+
+/***/ }),
 /* 569 */,
-/* 570 */,
+/* 570 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+// Copyright 2015 Joyent, Inc.
+
+var assert = __webpack_require__(757);
+var util = __webpack_require__(669);
+
+function FingerprintFormatError(fp, format) {
+	if (Error.captureStackTrace)
+		Error.captureStackTrace(this, FingerprintFormatError);
+	this.name = 'FingerprintFormatError';
+	this.fingerprint = fp;
+	this.format = format;
+	this.message = 'Fingerprint format is not supported, or is invalid: ';
+	if (fp !== undefined)
+		this.message += ' fingerprint = ' + fp;
+	if (format !== undefined)
+		this.message += ' format = ' + format;
+}
+util.inherits(FingerprintFormatError, Error);
+
+function InvalidAlgorithmError(alg) {
+	if (Error.captureStackTrace)
+		Error.captureStackTrace(this, InvalidAlgorithmError);
+	this.name = 'InvalidAlgorithmError';
+	this.algorithm = alg;
+	this.message = 'Algorithm "' + alg + '" is not supported';
+}
+util.inherits(InvalidAlgorithmError, Error);
+
+function KeyParseError(name, format, innerErr) {
+	if (Error.captureStackTrace)
+		Error.captureStackTrace(this, KeyParseError);
+	this.name = 'KeyParseError';
+	this.format = format;
+	this.keyName = name;
+	this.innerErr = innerErr;
+	this.message = 'Failed to parse ' + name + ' as a valid ' + format +
+	    ' format key: ' + innerErr.message;
+}
+util.inherits(KeyParseError, Error);
+
+function SignatureParseError(type, format, innerErr) {
+	if (Error.captureStackTrace)
+		Error.captureStackTrace(this, SignatureParseError);
+	this.name = 'SignatureParseError';
+	this.type = type;
+	this.format = format;
+	this.innerErr = innerErr;
+	this.message = 'Failed to parse the given data as a ' + type +
+	    ' signature in ' + format + ' format: ' + innerErr.message;
+}
+util.inherits(SignatureParseError, Error);
+
+function CertificateParseError(name, format, innerErr) {
+	if (Error.captureStackTrace)
+		Error.captureStackTrace(this, CertificateParseError);
+	this.name = 'CertificateParseError';
+	this.format = format;
+	this.certName = name;
+	this.innerErr = innerErr;
+	this.message = 'Failed to parse ' + name + ' as a valid ' + format +
+	    ' format certificate: ' + innerErr.message;
+}
+util.inherits(CertificateParseError, Error);
+
+function KeyEncryptedError(name, format) {
+	if (Error.captureStackTrace)
+		Error.captureStackTrace(this, KeyEncryptedError);
+	this.name = 'KeyEncryptedError';
+	this.format = format;
+	this.keyName = name;
+	this.message = 'The ' + format + ' format key ' + name + ' is ' +
+	    'encrypted (password-protected), and no passphrase was ' +
+	    'provided in `options`';
+}
+util.inherits(KeyEncryptedError, Error);
+
+module.exports = {
+	FingerprintFormatError: FingerprintFormatError,
+	InvalidAlgorithmError: InvalidAlgorithmError,
+	KeyParseError: KeyParseError,
+	SignatureParseError: SignatureParseError,
+	KeyEncryptedError: KeyEncryptedError,
+	CertificateParseError: CertificateParseError
+};
+
+
+/***/ }),
 /* 571 */,
 /* 572 */,
 /* 573 */,
@@ -22864,11 +29955,11 @@ function clean(key)
 
 module.exports = Signature;
 
-var assert = __webpack_require__(489);
-var Buffer = __webpack_require__(215).Buffer;
+var assert = __webpack_require__(757);
+var Buffer = __webpack_require__(481).Buffer;
 var algs = __webpack_require__(98);
 var crypto = __webpack_require__(417);
-var errs = __webpack_require__(753);
+var errs = __webpack_require__(570);
 var utils = __webpack_require__(270);
 var asn1 = __webpack_require__(62);
 var SSHBuffer = __webpack_require__(940);
@@ -23178,7 +30269,27 @@ Signature._oldVersionDetect = function (obj) {
 
 /***/ }),
 /* 576 */,
-/* 577 */,
+/* 577 */
+/***/ (function(module) {
+
+module.exports = getPageLinks
+
+function getPageLinks (link) {
+  link = link.link || link.headers.link || ''
+
+  const links = {}
+
+  // link format:
+  // '<https://api.github.com/users/aseemk/followers?page=2>; rel="next", <https://api.github.com/users/aseemk/followers?page=2>; rel="last"'
+  link.replace(/<([^>]*)>;\s*rel="([\w]*)"/g, (m, uri, type) => {
+    links[type] = uri
+  })
+
+  return links
+}
+
+
+/***/ }),
 /* 578 */,
 /* 579 */,
 /* 580 */,
@@ -23480,7 +30591,94 @@ Store.prototype.getAllCookies = function(cb) {
 
 
 /***/ }),
-/* 583 */,
+/* 583 */
+/***/ (function(module) {
+
+"use strict";
+
+
+var isNative = /\.node$/;
+
+function forEach(obj, callback) {
+    for ( var key in obj ) {
+        if (!Object.prototype.hasOwnProperty.call(obj, key)) {
+            continue;
+        }
+        callback(key);
+    }
+}
+
+function assign(target, source) {
+    forEach(source, function (key) {
+        target[key] = source[key];
+    });
+    return target;
+}
+
+function clearCache(requireCache) {
+    forEach(requireCache, function (resolvedPath) {
+        if (!isNative.test(resolvedPath)) {
+            delete requireCache[resolvedPath];
+        }
+    });
+}
+
+module.exports = function (requireCache, callback, callbackForModulesToKeep, module) {
+
+    var originalCache = assign({}, requireCache);
+    clearCache(requireCache);
+
+    if (callbackForModulesToKeep) {
+
+        var originalModuleChildren = module.children ? module.children.slice() : false; // Creates a shallow copy of module.children
+
+        callbackForModulesToKeep();
+
+        // Lists the cache entries made by callbackForModulesToKeep()
+        var modulesToKeep = [];
+        forEach(requireCache, function (key) {
+            modulesToKeep.push(key);
+        });
+
+        // Discards the modules required in callbackForModulesToKeep()
+        clearCache(requireCache);
+
+        if (module.children) { // Only true for node.js
+            module.children = originalModuleChildren; // Removes last references to modules required in callbackForModulesToKeep() -> No memory leak
+        }
+
+        // Takes the cache entries of the original cache in case the modules where required before
+        for ( var i = 0; i < modulesToKeep.length; i+=1 ) {
+            if (originalCache[modulesToKeep[i]]) {
+                requireCache[modulesToKeep[i]] = originalCache[modulesToKeep[i]];
+            }
+        }
+
+    }
+
+    var freshModule = callback();
+
+    var stealthCache = callbackForModulesToKeep ? assign({}, requireCache) : false;
+
+    clearCache(requireCache);
+
+    if (callbackForModulesToKeep) {
+        // In case modules to keep were required inside the stealthy require for the first time, copy them to the restored cache
+        for ( var k = 0; k < modulesToKeep.length; k+=1 ) {
+            if (stealthCache[modulesToKeep[k]]) {
+                requireCache[modulesToKeep[k]] = stealthCache[modulesToKeep[k]];
+            }
+        }
+    }
+
+    assign(requireCache, originalCache);
+
+    return freshModule;
+
+};
+
+
+/***/ }),
 /* 584 */
 /***/ (function(module) {
 
@@ -23555,8 +30753,8 @@ module.exports = {
 	write: write
 };
 
-var assert = __webpack_require__(489);
-var Buffer = __webpack_require__(215).Buffer;
+var assert = __webpack_require__(757);
+var Buffer = __webpack_require__(481).Buffer;
 var rfc4253 = __webpack_require__(538);
 var utils = __webpack_require__(270);
 var Key = __webpack_require__(852);
@@ -23679,7 +30877,7 @@ module.exports = require("http");
 
 "use strict";
 
-var es5 = __webpack_require__(883);
+var es5 = __webpack_require__(461);
 var Objectfreeze = es5.freeze;
 var util = __webpack_require__(248);
 var inherits = util.inherits;
@@ -23801,7 +30999,7 @@ module.exports = {
 /***/ (function(module, exports, __webpack_require__) {
 
 /* eslint-disable node/no-deprecated-api */
-var buffer = __webpack_require__(293)
+var buffer = __webpack_require__(407)
 var Buffer = buffer.Buffer
 
 // alternative to using Object.keys for old browsers
@@ -24073,7 +31271,52 @@ module.exports = require("events");
 /* 618 */,
 /* 619 */,
 /* 620 */,
-/* 621 */,
+/* 621 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+const path = __webpack_require__(622);
+const pathKey = __webpack_require__(39);
+
+module.exports = opts => {
+	opts = Object.assign({
+		cwd: process.cwd(),
+		path: process.env[pathKey()]
+	}, opts);
+
+	let prev;
+	let pth = path.resolve(opts.cwd);
+	const ret = [];
+
+	while (prev !== pth) {
+		ret.push(path.join(pth, 'node_modules/.bin'));
+		prev = pth;
+		pth = path.resolve(pth, '..');
+	}
+
+	// ensure the running `node` binary is used
+	ret.push(path.dirname(process.execPath));
+
+	return ret.concat(opts.path).join(path.delimiter);
+};
+
+module.exports.env = opts => {
+	opts = Object.assign({
+		env: process.env
+	}, opts);
+
+	const env = Object.assign({}, opts.env);
+	const path = pathKey({env});
+
+	opts.path = env[path];
+	env[path] = module.exports(opts);
+
+	return env;
+};
+
+
+/***/ }),
 /* 622 */
 /***/ (function(module) {
 
@@ -24091,12 +31334,12 @@ module.exports = {
 	write: write
 };
 
-var assert = __webpack_require__(489);
-var Buffer = __webpack_require__(215).Buffer;
+var assert = __webpack_require__(757);
+var Buffer = __webpack_require__(481).Buffer;
 var rfc4253 = __webpack_require__(538);
 var Key = __webpack_require__(852);
 
-var errors = __webpack_require__(753);
+var errors = __webpack_require__(570);
 
 function read(buf, options) {
 	var lines = buf.toString('ascii').split(/[\r\n]+/);
@@ -24187,7 +31430,61 @@ function wrap(txt, len) {
 
 /***/ }),
 /* 625 */,
-/* 626 */,
+/* 626 */
+/***/ (function(module) {
+
+"use strict";
+
+
+/*!
+ * isobject <https://github.com/jonschlinkert/isobject>
+ *
+ * Copyright (c) 2014-2017, Jon Schlinkert.
+ * Released under the MIT License.
+ */
+
+function isObject(val) {
+  return val != null && typeof val === 'object' && Array.isArray(val) === false;
+}
+
+/*!
+ * is-plain-object <https://github.com/jonschlinkert/is-plain-object>
+ *
+ * Copyright (c) 2014-2017, Jon Schlinkert.
+ * Released under the MIT License.
+ */
+
+function isObjectObject(o) {
+  return isObject(o) === true
+    && Object.prototype.toString.call(o) === '[object Object]';
+}
+
+function isPlainObject(o) {
+  var ctor,prot;
+
+  if (isObjectObject(o) === false) return false;
+
+  // If has modified constructor
+  ctor = o.constructor;
+  if (typeof ctor !== 'function') return false;
+
+  // If has modified prototype
+  prot = ctor.prototype;
+  if (isObjectObject(prot) === false) return false;
+
+  // If constructor does not have an Object-specific method
+  if (prot.hasOwnProperty('isPrototypeOf') === false) {
+    return false;
+  }
+
+  // Most likely a plain Object
+  return true;
+}
+
+module.exports = isPlainObject;
+
+
+/***/ }),
 /* 627 */
 /***/ (function(__unusedmodule, exports) {
 
@@ -24490,7 +31787,28 @@ module.exports = require("net");
 /* 637 */,
 /* 638 */,
 /* 639 */,
-/* 640 */,
+/* 640 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const customField_1 = __webpack_require__(700);
+class ProjectCustomFieldImpl {
+    constructor() {
+        this.canBeEmpty = false;
+        this.emptyFieldText = '';
+        this.field = new customField_1.CustomFieldImpl();
+        this.hasRunningJob = false;
+        this.isPublic = false;
+        this.ordinal = 0;
+        this.id = '';
+    }
+}
+exports.ProjectCustomFieldImpl = ProjectCustomFieldImpl;
+
+
+/***/ }),
 /* 641 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
@@ -25122,7 +32440,19 @@ Promise.prototype._resolveFromSyncValue = function (value) {
 /* 646 */,
 /* 647 */,
 /* 648 */,
-/* 649 */,
+/* 649 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = getLastPage
+
+const getPage = __webpack_require__(265)
+
+function getLastPage (octokit, link, headers) {
+  return getPage(octokit, link, 'last', headers)
+}
+
+
+/***/ }),
 /* 650 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
@@ -25134,7 +32464,7 @@ var Signature = __webpack_require__(575);
 var PrivateKey = __webpack_require__(502);
 var Certificate = __webpack_require__(752);
 var Identity = __webpack_require__(378);
-var errs = __webpack_require__(753);
+var errs = __webpack_require__(570);
 
 module.exports = {
 	/* top-level classes */
@@ -25254,88 +32584,59 @@ module.exports = function generate_oneOf(it, $keyword, $ruleType) {
 /* 654 */
 /***/ (function(module) {
 
-"use strict";
+// This is not the set of all possible signals.
+//
+// It IS, however, the set of all signals that trigger
+// an exit on either Linux or BSD systems.  Linux is a
+// superset of the signal names supported on BSD, and
+// the unknown signals just fail to register, so we can
+// catch that easily enough.
+//
+// Don't bother with SIGKILL.  It's uncatchable, which
+// means that we can't fire any callbacks anyway.
+//
+// If a user does happen to register a handler on a non-
+// fatal signal like SIGWINCH or something, and then
+// exit, it'll end up firing `process.emit('exit')`, so
+// the handler will be fired anyway.
+//
+// SIGBUS, SIGFPE, SIGSEGV and SIGILL, when not raised
+// artificially, inherently leave the process in a
+// state from which it is not safe to try and enter JS
+// listeners.
+module.exports = [
+  'SIGABRT',
+  'SIGALRM',
+  'SIGHUP',
+  'SIGINT',
+  'SIGTERM'
+]
 
-
-var isNative = /\.node$/;
-
-function forEach(obj, callback) {
-    for ( var key in obj ) {
-        if (!Object.prototype.hasOwnProperty.call(obj, key)) {
-            continue;
-        }
-        callback(key);
-    }
+if (process.platform !== 'win32') {
+  module.exports.push(
+    'SIGVTALRM',
+    'SIGXCPU',
+    'SIGXFSZ',
+    'SIGUSR2',
+    'SIGTRAP',
+    'SIGSYS',
+    'SIGQUIT',
+    'SIGIOT'
+    // should detect profiler and enable/disable accordingly.
+    // see #21
+    // 'SIGPROF'
+  )
 }
 
-function assign(target, source) {
-    forEach(source, function (key) {
-        target[key] = source[key];
-    });
-    return target;
+if (process.platform === 'linux') {
+  module.exports.push(
+    'SIGIO',
+    'SIGPOLL',
+    'SIGPWR',
+    'SIGSTKFLT',
+    'SIGUNUSED'
+  )
 }
-
-function clearCache(requireCache) {
-    forEach(requireCache, function (resolvedPath) {
-        if (!isNative.test(resolvedPath)) {
-            delete requireCache[resolvedPath];
-        }
-    });
-}
-
-module.exports = function (requireCache, callback, callbackForModulesToKeep, module) {
-
-    var originalCache = assign({}, requireCache);
-    clearCache(requireCache);
-
-    if (callbackForModulesToKeep) {
-
-        var originalModuleChildren = module.children ? module.children.slice() : false; // Creates a shallow copy of module.children
-
-        callbackForModulesToKeep();
-
-        // Lists the cache entries made by callbackForModulesToKeep()
-        var modulesToKeep = [];
-        forEach(requireCache, function (key) {
-            modulesToKeep.push(key);
-        });
-
-        // Discards the modules required in callbackForModulesToKeep()
-        clearCache(requireCache);
-
-        if (module.children) { // Only true for node.js
-            module.children = originalModuleChildren; // Removes last references to modules required in callbackForModulesToKeep() -> No memory leak
-        }
-
-        // Takes the cache entries of the original cache in case the modules where required before
-        for ( var i = 0; i < modulesToKeep.length; i+=1 ) {
-            if (originalCache[modulesToKeep[i]]) {
-                requireCache[modulesToKeep[i]] = originalCache[modulesToKeep[i]];
-            }
-        }
-
-    }
-
-    var freshModule = callback();
-
-    var stealthCache = callbackForModulesToKeep ? assign({}, requireCache) : false;
-
-    clearCache(requireCache);
-
-    if (callbackForModulesToKeep) {
-        // In case modules to keep were required inside the stealthy require for the first time, copy them to the restored cache
-        for ( var k = 0; k < modulesToKeep.length; k+=1 ) {
-            if (stealthCache[modulesToKeep[k]]) {
-                requireCache[modulesToKeep[k]] = stealthCache[modulesToKeep[k]];
-            }
-        }
-    }
-
-    assign(requireCache, originalCache);
-
-    return freshModule;
-
-};
 
 
 /***/ }),
@@ -25632,7 +32933,7 @@ var util = __webpack_require__(248);
 var maybeWrapAsError = util.maybeWrapAsError;
 var errors = __webpack_require__(607);
 var OperationalError = errors.OperationalError;
-var es5 = __webpack_require__(883);
+var es5 = __webpack_require__(461);
 
 function isUntypedError(obj) {
     return obj instanceof Error &&
@@ -25707,14 +33008,14 @@ module.exports = {
   content: __webpack_require__(162),
   cookie: __webpack_require__(326),
   creator: __webpack_require__(776),
-  entry: __webpack_require__(919),
+  entry: __webpack_require__(96),
   har: __webpack_require__(41),
-  header: __webpack_require__(158),
+  header: __webpack_require__(841),
   log: __webpack_require__(319),
   page: __webpack_require__(744),
   pageTimings: __webpack_require__(181),
   postData: __webpack_require__(740),
-  query: __webpack_require__(813),
+  query: __webpack_require__(411),
   request: __webpack_require__(380),
   response: __webpack_require__(226),
   timings: __webpack_require__(758)
@@ -25819,8 +33120,73 @@ module.exports = function generate_not(it, $keyword, $ruleType) {
 
 
 /***/ }),
-/* 674 */,
-/* 675 */,
+/* 674 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = authenticate;
+
+const { Deprecation } = __webpack_require__(692);
+const once = __webpack_require__(969);
+
+const deprecateAuthenticate = once((log, deprecation) => log.warn(deprecation));
+
+function authenticate(state, options) {
+  deprecateAuthenticate(
+    state.octokit.log,
+    new Deprecation(
+      '[@octokit/rest] octokit.authenticate() is deprecated. Use "auth" constructor option instead.'
+    )
+  );
+
+  if (!options) {
+    state.auth = false;
+    return;
+  }
+
+  switch (options.type) {
+    case "basic":
+      if (!options.username || !options.password) {
+        throw new Error(
+          "Basic authentication requires both a username and password to be set"
+        );
+      }
+      break;
+
+    case "oauth":
+      if (!options.token && !(options.key && options.secret)) {
+        throw new Error(
+          "OAuth2 authentication requires a token or key & secret to be set"
+        );
+      }
+      break;
+
+    case "token":
+    case "app":
+      if (!options.token) {
+        throw new Error("Token authentication requires a token to be set");
+      }
+      break;
+
+    default:
+      throw new Error(
+        "Invalid authentication type, must be 'basic', 'oauth', 'token' or 'app'"
+      );
+  }
+
+  state.auth = options;
+}
+
+
+/***/ }),
+/* 675 */
+/***/ (function(module) {
+
+module.exports = function btoa(str) {
+  return new Buffer(str).toString('base64')
+}
+
+
+/***/ }),
 /* 676 */,
 /* 677 */,
 /* 678 */,
@@ -25857,7 +33223,7 @@ module.exports = isUndefined;
 
 // Copyright 2016 Joyent, Inc.
 
-var x509 = __webpack_require__(349);
+var x509 = __webpack_require__(919);
 
 module.exports = {
 	read: read,
@@ -25866,9 +33232,9 @@ module.exports = {
 	write: write
 };
 
-var assert = __webpack_require__(489);
+var assert = __webpack_require__(757);
 var asn1 = __webpack_require__(62);
-var Buffer = __webpack_require__(215).Buffer;
+var Buffer = __webpack_require__(481).Buffer;
 var algs = __webpack_require__(98);
 var utils = __webpack_require__(270);
 var Key = __webpack_require__(852);
@@ -25948,7 +33314,62 @@ function write(cert, options) {
 /***/ }),
 /* 681 */,
 /* 682 */,
-/* 683 */,
+/* 683 */
+/***/ (function(module) {
+
+"use strict";
+
+
+var KEYWORDS = [
+  'multipleOf',
+  'maximum',
+  'exclusiveMaximum',
+  'minimum',
+  'exclusiveMinimum',
+  'maxLength',
+  'minLength',
+  'pattern',
+  'additionalItems',
+  'maxItems',
+  'minItems',
+  'uniqueItems',
+  'maxProperties',
+  'minProperties',
+  'required',
+  'additionalProperties',
+  'enum',
+  'format',
+  'const'
+];
+
+module.exports = function (metaSchema, keywordsJsonPointers) {
+  for (var i=0; i<keywordsJsonPointers.length; i++) {
+    metaSchema = JSON.parse(JSON.stringify(metaSchema));
+    var segments = keywordsJsonPointers[i].split('/');
+    var keywords = metaSchema;
+    var j;
+    for (j=1; j<segments.length; j++)
+      keywords = keywords[segments[j]];
+
+    for (j=0; j<KEYWORDS.length; j++) {
+      var key = KEYWORDS[j];
+      var schema = keywords[key];
+      if (schema) {
+        keywords[key] = {
+          anyOf: [
+            schema,
+            { $ref: 'https://raw.githubusercontent.com/epoberezkin/ajv/master/lib/refs/data.json#' }
+          ]
+        };
+      }
+    }
+  }
+
+  return metaSchema;
+};
+
+
+/***/ }),
 /* 684 */,
 /* 685 */
 /***/ (function(module) {
@@ -26147,13 +33568,7 @@ module.exports = function generate_format(it, $keyword, $ruleType) {
 /***/ }),
 /* 688 */,
 /* 689 */,
-/* 690 */
-/***/ (function() {
-
-eval("require")("@actions/github");
-
-
-/***/ }),
+/* 690 */,
 /* 691 */
 /***/ (function(module) {
 
@@ -26181,7 +33596,33 @@ module.exports = function ucs2length(str) {
 
 
 /***/ }),
-/* 692 */,
+/* 692 */
+/***/ (function(__unusedmodule, exports) {
+
+"use strict";
+
+
+Object.defineProperty(exports, '__esModule', { value: true });
+
+class Deprecation extends Error {
+  constructor(message) {
+    super(message); // Maintains proper stack trace (only available on V8)
+
+    /* istanbul ignore next */
+
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, this.constructor);
+    }
+
+    this.name = 'Deprecation';
+  }
+
+}
+
+exports.Deprecation = Deprecation;
+
+
+/***/ }),
 /* 693 */,
 /* 694 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
@@ -26251,197 +33692,54 @@ Promise.prototype.asCallback = Promise.prototype.nodeify = function (nodeback,
 /* 695 */,
 /* 696 */,
 /* 697 */
-/***/ (function(__unusedmodule, exports, __webpack_require__) {
+/***/ (function(module) {
 
-/*
- * extsprintf.js: extended POSIX-style sprintf
- */
+"use strict";
 
-var mod_assert = __webpack_require__(357);
-var mod_util = __webpack_require__(669);
+module.exports = (promise, onFinally) => {
+	onFinally = onFinally || (() => {});
 
-/*
- * Public interface
- */
-exports.sprintf = jsSprintf;
-exports.printf = jsPrintf;
-exports.fprintf = jsFprintf;
-
-/*
- * Stripped down version of s[n]printf(3c).  We make a best effort to throw an
- * exception when given a format string we don't understand, rather than
- * ignoring it, so that we won't break existing programs if/when we go implement
- * the rest of this.
- *
- * This implementation currently supports specifying
- *	- field alignment ('-' flag),
- * 	- zero-pad ('0' flag)
- *	- always show numeric sign ('+' flag),
- *	- field width
- *	- conversions for strings, decimal integers, and floats (numbers).
- *	- argument size specifiers.  These are all accepted but ignored, since
- *	  Javascript has no notion of the physical size of an argument.
- *
- * Everything else is currently unsupported, most notably precision, unsigned
- * numbers, non-decimal numbers, and characters.
- */
-function jsSprintf(fmt)
-{
-	var regex = [
-	    '([^%]*)',				/* normal text */
-	    '%',				/* start of format */
-	    '([\'\\-+ #0]*?)',			/* flags (optional) */
-	    '([1-9]\\d*)?',			/* width (optional) */
-	    '(\\.([1-9]\\d*))?',		/* precision (optional) */
-	    '[lhjztL]*?',			/* length mods (ignored) */
-	    '([diouxXfFeEgGaAcCsSp%jr])'	/* conversion */
-	].join('');
-
-	var re = new RegExp(regex);
-	var args = Array.prototype.slice.call(arguments, 1);
-	var flags, width, precision, conversion;
-	var left, pad, sign, arg, match;
-	var ret = '';
-	var argn = 1;
-
-	mod_assert.equal('string', typeof (fmt));
-
-	while ((match = re.exec(fmt)) !== null) {
-		ret += match[1];
-		fmt = fmt.substring(match[0].length);
-
-		flags = match[2] || '';
-		width = match[3] || 0;
-		precision = match[4] || '';
-		conversion = match[6];
-		left = false;
-		sign = false;
-		pad = ' ';
-
-		if (conversion == '%') {
-			ret += '%';
-			continue;
-		}
-
-		if (args.length === 0)
-			throw (new Error('too few args to sprintf'));
-
-		arg = args.shift();
-		argn++;
-
-		if (flags.match(/[\' #]/))
-			throw (new Error(
-			    'unsupported flags: ' + flags));
-
-		if (precision.length > 0)
-			throw (new Error(
-			    'non-zero precision not supported'));
-
-		if (flags.match(/-/))
-			left = true;
-
-		if (flags.match(/0/))
-			pad = '0';
-
-		if (flags.match(/\+/))
-			sign = true;
-
-		switch (conversion) {
-		case 's':
-			if (arg === undefined || arg === null)
-				throw (new Error('argument ' + argn +
-				    ': attempted to print undefined or null ' +
-				    'as a string'));
-			ret += doPad(pad, width, left, arg.toString());
-			break;
-
-		case 'd':
-			arg = Math.floor(arg);
-			/*jsl:fallthru*/
-		case 'f':
-			sign = sign && arg > 0 ? '+' : '';
-			ret += sign + doPad(pad, width, left,
-			    arg.toString());
-			break;
-
-		case 'x':
-			ret += doPad(pad, width, left, arg.toString(16));
-			break;
-
-		case 'j': /* non-standard */
-			if (width === 0)
-				width = 10;
-			ret += mod_util.inspect(arg, false, width);
-			break;
-
-		case 'r': /* non-standard */
-			ret += dumpException(arg);
-			break;
-
-		default:
-			throw (new Error('unsupported conversion: ' +
-			    conversion));
-		}
-	}
-
-	ret += fmt;
-	return (ret);
-}
-
-function jsPrintf() {
-	var args = Array.prototype.slice.call(arguments);
-	args.unshift(process.stdout);
-	jsFprintf.apply(null, args);
-}
-
-function jsFprintf(stream) {
-	var args = Array.prototype.slice.call(arguments, 1);
-	return (stream.write(jsSprintf.apply(this, args)));
-}
-
-function doPad(chr, width, left, str)
-{
-	var ret = str;
-
-	while (ret.length < width) {
-		if (left)
-			ret += chr;
-		else
-			ret = chr + ret;
-	}
-
-	return (ret);
-}
-
-/*
- * This function dumps long stack traces for exceptions having a cause() method.
- * See node-verror for an example.
- */
-function dumpException(ex)
-{
-	var ret;
-
-	if (!(ex instanceof Error))
-		throw (new Error(jsSprintf('invalid type for %%r: %j', ex)));
-
-	/* Note that V8 prepends "ex.stack" with ex.toString(). */
-	ret = 'EXCEPTION: ' + ex.constructor.name + ': ' + ex.stack;
-
-	if (ex.cause && typeof (ex.cause) === 'function') {
-		var cex = ex.cause();
-		if (cex) {
-			ret += '\nCaused by: ' + dumpException(cex);
-		}
-	}
-
-	return (ret);
-}
+	return promise.then(
+		val => new Promise(resolve => {
+			resolve(onFinally());
+		}).then(() => val),
+		err => new Promise(resolve => {
+			resolve(onFinally());
+		}).then(() => {
+			throw err;
+		})
+	);
+};
 
 
 /***/ }),
 /* 698 */,
 /* 699 */,
-/* 700 */,
+/* 700 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const customFieldDefaults_1 = __webpack_require__(862);
+class CustomFieldImpl {
+    constructor() {
+        this.aliases = '';
+        this.fieldDefaults = new customFieldDefaults_1.CustomFieldDefaultsImpl();
+        this.hasRunningJob = false;
+        this.isAutoAttached = false;
+        this.isDisplayedInIssueList = false;
+        this.isUpdateable = false;
+        this.localizedName = '';
+        this.name = '';
+        this.ordinal = 0;
+        this.id = '';
+    }
+}
+exports.CustomFieldImpl = CustomFieldImpl;
+
+
+/***/ }),
 /* 701 */
 /***/ (function(__unusedmodule, exports, __webpack_require__) {
 
@@ -28350,9 +35648,9 @@ module.exports = {
 	writeECDSACurve: writeECDSACurve
 };
 
-var assert = __webpack_require__(489);
+var assert = __webpack_require__(757);
 var asn1 = __webpack_require__(62);
-var Buffer = __webpack_require__(215).Buffer;
+var Buffer = __webpack_require__(481).Buffer;
 var algs = __webpack_require__(98);
 var utils = __webpack_require__(270);
 var Key = __webpack_require__(852);
@@ -29917,7 +37215,7 @@ module.exports = exports
 // Copyright 2011 Mark Cavage <mcavage@gmail.com> All rights reserved.
 
 var assert = __webpack_require__(357);
-var Buffer = __webpack_require__(215).Buffer;
+var Buffer = __webpack_require__(481).Buffer;
 
 var ASN1 = __webpack_require__(362);
 var errors = __webpack_require__(584);
@@ -30258,44 +37556,65 @@ module.exports = function (data, opts) {
 
 /***/ }),
 /* 742 */
-/***/ (function(module) {
+/***/ (function(module, __unusedexports, __webpack_require__) {
 
-// Generated by CoffeeScript 1.12.2
-(function() {
-  var getNanoSeconds, hrtime, loadTime, moduleLoadTime, nodeLoadTime, upTime;
+var fs = __webpack_require__(747)
+var core
+if (process.platform === 'win32' || global.TESTING_WINDOWS) {
+  core = __webpack_require__(818)
+} else {
+  core = __webpack_require__(197)
+}
 
-  if ((typeof performance !== "undefined" && performance !== null) && performance.now) {
-    module.exports = function() {
-      return performance.now();
-    };
-  } else if ((typeof process !== "undefined" && process !== null) && process.hrtime) {
-    module.exports = function() {
-      return (getNanoSeconds() - nodeLoadTime) / 1e6;
-    };
-    hrtime = process.hrtime;
-    getNanoSeconds = function() {
-      var hr;
-      hr = hrtime();
-      return hr[0] * 1e9 + hr[1];
-    };
-    moduleLoadTime = getNanoSeconds();
-    upTime = process.uptime() * 1e9;
-    nodeLoadTime = moduleLoadTime - upTime;
-  } else if (Date.now) {
-    module.exports = function() {
-      return Date.now() - loadTime;
-    };
-    loadTime = Date.now();
-  } else {
-    module.exports = function() {
-      return new Date().getTime() - loadTime;
-    };
-    loadTime = new Date().getTime();
+module.exports = isexe
+isexe.sync = sync
+
+function isexe (path, options, cb) {
+  if (typeof options === 'function') {
+    cb = options
+    options = {}
   }
 
-}).call(this);
+  if (!cb) {
+    if (typeof Promise !== 'function') {
+      throw new TypeError('callback not provided')
+    }
 
-//# sourceMappingURL=performance-now.js.map
+    return new Promise(function (resolve, reject) {
+      isexe(path, options || {}, function (er, is) {
+        if (er) {
+          reject(er)
+        } else {
+          resolve(is)
+        }
+      })
+    })
+  }
+
+  core(path, options || {}, function (er, is) {
+    // ignore EACCES because that just means we aren't allowed to run it
+    if (er) {
+      if (er.code === 'EACCES' || options && options.ignoreErrors) {
+        er = null
+        is = false
+      }
+    }
+    cb(er, is)
+  })
+}
+
+function sync (path, options) {
+  // my kingdom for a filtered catch
+  try {
+    return core.sync(path, options || {})
+  } catch (er) {
+    if (options && options.ignoreErrors || er.code === 'EACCES') {
+      return false
+    } else {
+      throw er
+    }
+  }
+}
 
 
 /***/ }),
@@ -30707,13 +38026,13 @@ function async(callback)
 
 module.exports = Certificate;
 
-var assert = __webpack_require__(489);
-var Buffer = __webpack_require__(215).Buffer;
+var assert = __webpack_require__(757);
+var Buffer = __webpack_require__(481).Buffer;
 var algs = __webpack_require__(98);
 var crypto = __webpack_require__(417);
 var Fingerprint = __webpack_require__(400);
 var Signature = __webpack_require__(575);
-var errs = __webpack_require__(753);
+var errs = __webpack_require__(570);
 var util = __webpack_require__(669);
 var utils = __webpack_require__(270);
 var Key = __webpack_require__(852);
@@ -30722,7 +38041,7 @@ var Identity = __webpack_require__(378);
 
 var formats = {};
 formats['openssh'] = __webpack_require__(893);
-formats['x509'] = __webpack_require__(349);
+formats['x509'] = __webpack_require__(919);
 formats['pem'] = __webpack_require__(680);
 
 var CertificateParseError = errs.CertificateParseError;
@@ -31117,92 +38436,157 @@ Certificate._oldVersionDetect = function (obj) {
 
 /***/ }),
 /* 753 */
-/***/ (function(module, __unusedexports, __webpack_require__) {
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
 
-// Copyright 2015 Joyent, Inc.
+"use strict";
 
-var assert = __webpack_require__(489);
-var util = __webpack_require__(669);
 
-function FingerprintFormatError(fp, format) {
-	if (Error.captureStackTrace)
-		Error.captureStackTrace(this, FingerprintFormatError);
-	this.name = 'FingerprintFormatError';
-	this.fingerprint = fp;
-	this.format = format;
-	this.message = 'Fingerprint format is not supported, or is invalid: ';
-	if (fp !== undefined)
-		this.message += ' fingerprint = ' + fp;
-	if (format !== undefined)
-		this.message += ' format = ' + format;
+Object.defineProperty(exports, '__esModule', { value: true });
+
+function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
+
+var endpoint = __webpack_require__(385);
+var universalUserAgent = __webpack_require__(796);
+var isPlainObject = _interopDefault(__webpack_require__(548));
+var nodeFetch = _interopDefault(__webpack_require__(454));
+var requestError = __webpack_require__(463);
+
+const VERSION = "5.3.1";
+
+function getBufferResponse(response) {
+  return response.arrayBuffer();
 }
-util.inherits(FingerprintFormatError, Error);
 
-function InvalidAlgorithmError(alg) {
-	if (Error.captureStackTrace)
-		Error.captureStackTrace(this, InvalidAlgorithmError);
-	this.name = 'InvalidAlgorithmError';
-	this.algorithm = alg;
-	this.message = 'Algorithm "' + alg + '" is not supported';
+function fetchWrapper(requestOptions) {
+  if (isPlainObject(requestOptions.body) || Array.isArray(requestOptions.body)) {
+    requestOptions.body = JSON.stringify(requestOptions.body);
+  }
+
+  let headers = {};
+  let status;
+  let url;
+  const fetch = requestOptions.request && requestOptions.request.fetch || nodeFetch;
+  return fetch(requestOptions.url, Object.assign({
+    method: requestOptions.method,
+    body: requestOptions.body,
+    headers: requestOptions.headers,
+    redirect: requestOptions.redirect
+  }, requestOptions.request)).then(response => {
+    url = response.url;
+    status = response.status;
+
+    for (const keyAndValue of response.headers) {
+      headers[keyAndValue[0]] = keyAndValue[1];
+    }
+
+    if (status === 204 || status === 205) {
+      return;
+    } // GitHub API returns 200 for HEAD requsets
+
+
+    if (requestOptions.method === "HEAD") {
+      if (status < 400) {
+        return;
+      }
+
+      throw new requestError.RequestError(response.statusText, status, {
+        headers,
+        request: requestOptions
+      });
+    }
+
+    if (status === 304) {
+      throw new requestError.RequestError("Not modified", status, {
+        headers,
+        request: requestOptions
+      });
+    }
+
+    if (status >= 400) {
+      return response.text().then(message => {
+        const error = new requestError.RequestError(message, status, {
+          headers,
+          request: requestOptions
+        });
+
+        try {
+          let responseBody = JSON.parse(error.message);
+          Object.assign(error, responseBody);
+          let errors = responseBody.errors; // Assumption `errors` would always be in Array Fotmat
+
+          error.message = error.message + ": " + errors.map(JSON.stringify).join(", ");
+        } catch (e) {// ignore, see octokit/rest.js#684
+        }
+
+        throw error;
+      });
+    }
+
+    const contentType = response.headers.get("content-type");
+
+    if (/application\/json/.test(contentType)) {
+      return response.json();
+    }
+
+    if (!contentType || /^text\/|charset=utf-8$/.test(contentType)) {
+      return response.text();
+    }
+
+    return getBufferResponse(response);
+  }).then(data => {
+    return {
+      status,
+      url,
+      headers,
+      data
+    };
+  }).catch(error => {
+    if (error instanceof requestError.RequestError) {
+      throw error;
+    }
+
+    throw new requestError.RequestError(error.message, 500, {
+      headers,
+      request: requestOptions
+    });
+  });
 }
-util.inherits(InvalidAlgorithmError, Error);
 
-function KeyParseError(name, format, innerErr) {
-	if (Error.captureStackTrace)
-		Error.captureStackTrace(this, KeyParseError);
-	this.name = 'KeyParseError';
-	this.format = format;
-	this.keyName = name;
-	this.innerErr = innerErr;
-	this.message = 'Failed to parse ' + name + ' as a valid ' + format +
-	    ' format key: ' + innerErr.message;
+function withDefaults(oldEndpoint, newDefaults) {
+  const endpoint = oldEndpoint.defaults(newDefaults);
+
+  const newApi = function (route, parameters) {
+    const endpointOptions = endpoint.merge(route, parameters);
+
+    if (!endpointOptions.request || !endpointOptions.request.hook) {
+      return fetchWrapper(endpoint.parse(endpointOptions));
+    }
+
+    const request = (route, parameters) => {
+      return fetchWrapper(endpoint.parse(endpoint.merge(route, parameters)));
+    };
+
+    Object.assign(request, {
+      endpoint,
+      defaults: withDefaults.bind(null, endpoint)
+    });
+    return endpointOptions.request.hook(request, endpointOptions);
+  };
+
+  return Object.assign(newApi, {
+    endpoint,
+    defaults: withDefaults.bind(null, endpoint)
+  });
 }
-util.inherits(KeyParseError, Error);
 
-function SignatureParseError(type, format, innerErr) {
-	if (Error.captureStackTrace)
-		Error.captureStackTrace(this, SignatureParseError);
-	this.name = 'SignatureParseError';
-	this.type = type;
-	this.format = format;
-	this.innerErr = innerErr;
-	this.message = 'Failed to parse the given data as a ' + type +
-	    ' signature in ' + format + ' format: ' + innerErr.message;
-}
-util.inherits(SignatureParseError, Error);
+const request = withDefaults(endpoint.endpoint, {
+  headers: {
+    "user-agent": `octokit-request.js/${VERSION} ${universalUserAgent.getUserAgent()}`
+  }
+});
 
-function CertificateParseError(name, format, innerErr) {
-	if (Error.captureStackTrace)
-		Error.captureStackTrace(this, CertificateParseError);
-	this.name = 'CertificateParseError';
-	this.format = format;
-	this.certName = name;
-	this.innerErr = innerErr;
-	this.message = 'Failed to parse ' + name + ' as a valid ' + format +
-	    ' format certificate: ' + innerErr.message;
-}
-util.inherits(CertificateParseError, Error);
-
-function KeyEncryptedError(name, format) {
-	if (Error.captureStackTrace)
-		Error.captureStackTrace(this, KeyEncryptedError);
-	this.name = 'KeyEncryptedError';
-	this.format = format;
-	this.keyName = name;
-	this.message = 'The ' + format + ' format key ' + name + ' is ' +
-	    'encrypted (password-protected), and no passphrase was ' +
-	    'provided in `options`';
-}
-util.inherits(KeyEncryptedError, Error);
-
-module.exports = {
-	FingerprintFormatError: FingerprintFormatError,
-	InvalidAlgorithmError: InvalidAlgorithmError,
-	KeyParseError: KeyParseError,
-	SignatureParseError: SignatureParseError,
-	KeyEncryptedError: KeyEncryptedError,
-	CertificateParseError: CertificateParseError
-};
+exports.request = request;
+//# sourceMappingURL=index.js.map
 
 
 /***/ }),
@@ -31282,7 +38666,223 @@ Promise.bind = function (thisArg, value) {
 
 /***/ }),
 /* 756 */,
-/* 757 */,
+/* 757 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+// Copyright (c) 2012, Mark Cavage. All rights reserved.
+// Copyright 2015 Joyent, Inc.
+
+var assert = __webpack_require__(357);
+var Stream = __webpack_require__(413).Stream;
+var util = __webpack_require__(669);
+
+
+///--- Globals
+
+/* JSSTYLED */
+var UUID_REGEXP = /^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$/;
+
+
+///--- Internal
+
+function _capitalize(str) {
+    return (str.charAt(0).toUpperCase() + str.slice(1));
+}
+
+function _toss(name, expected, oper, arg, actual) {
+    throw new assert.AssertionError({
+        message: util.format('%s (%s) is required', name, expected),
+        actual: (actual === undefined) ? typeof (arg) : actual(arg),
+        expected: expected,
+        operator: oper || '===',
+        stackStartFunction: _toss.caller
+    });
+}
+
+function _getClass(arg) {
+    return (Object.prototype.toString.call(arg).slice(8, -1));
+}
+
+function noop() {
+    // Why even bother with asserts?
+}
+
+
+///--- Exports
+
+var types = {
+    bool: {
+        check: function (arg) { return typeof (arg) === 'boolean'; }
+    },
+    func: {
+        check: function (arg) { return typeof (arg) === 'function'; }
+    },
+    string: {
+        check: function (arg) { return typeof (arg) === 'string'; }
+    },
+    object: {
+        check: function (arg) {
+            return typeof (arg) === 'object' && arg !== null;
+        }
+    },
+    number: {
+        check: function (arg) {
+            return typeof (arg) === 'number' && !isNaN(arg);
+        }
+    },
+    finite: {
+        check: function (arg) {
+            return typeof (arg) === 'number' && !isNaN(arg) && isFinite(arg);
+        }
+    },
+    buffer: {
+        check: function (arg) { return Buffer.isBuffer(arg); },
+        operator: 'Buffer.isBuffer'
+    },
+    array: {
+        check: function (arg) { return Array.isArray(arg); },
+        operator: 'Array.isArray'
+    },
+    stream: {
+        check: function (arg) { return arg instanceof Stream; },
+        operator: 'instanceof',
+        actual: _getClass
+    },
+    date: {
+        check: function (arg) { return arg instanceof Date; },
+        operator: 'instanceof',
+        actual: _getClass
+    },
+    regexp: {
+        check: function (arg) { return arg instanceof RegExp; },
+        operator: 'instanceof',
+        actual: _getClass
+    },
+    uuid: {
+        check: function (arg) {
+            return typeof (arg) === 'string' && UUID_REGEXP.test(arg);
+        },
+        operator: 'isUUID'
+    }
+};
+
+function _setExports(ndebug) {
+    var keys = Object.keys(types);
+    var out;
+
+    /* re-export standard assert */
+    if (process.env.NODE_NDEBUG) {
+        out = noop;
+    } else {
+        out = function (arg, msg) {
+            if (!arg) {
+                _toss(msg, 'true', arg);
+            }
+        };
+    }
+
+    /* standard checks */
+    keys.forEach(function (k) {
+        if (ndebug) {
+            out[k] = noop;
+            return;
+        }
+        var type = types[k];
+        out[k] = function (arg, msg) {
+            if (!type.check(arg)) {
+                _toss(msg, k, type.operator, arg, type.actual);
+            }
+        };
+    });
+
+    /* optional checks */
+    keys.forEach(function (k) {
+        var name = 'optional' + _capitalize(k);
+        if (ndebug) {
+            out[name] = noop;
+            return;
+        }
+        var type = types[k];
+        out[name] = function (arg, msg) {
+            if (arg === undefined || arg === null) {
+                return;
+            }
+            if (!type.check(arg)) {
+                _toss(msg, k, type.operator, arg, type.actual);
+            }
+        };
+    });
+
+    /* arrayOf checks */
+    keys.forEach(function (k) {
+        var name = 'arrayOf' + _capitalize(k);
+        if (ndebug) {
+            out[name] = noop;
+            return;
+        }
+        var type = types[k];
+        var expected = '[' + k + ']';
+        out[name] = function (arg, msg) {
+            if (!Array.isArray(arg)) {
+                _toss(msg, expected, type.operator, arg, type.actual);
+            }
+            var i;
+            for (i = 0; i < arg.length; i++) {
+                if (!type.check(arg[i])) {
+                    _toss(msg, expected, type.operator, arg, type.actual);
+                }
+            }
+        };
+    });
+
+    /* optionalArrayOf checks */
+    keys.forEach(function (k) {
+        var name = 'optionalArrayOf' + _capitalize(k);
+        if (ndebug) {
+            out[name] = noop;
+            return;
+        }
+        var type = types[k];
+        var expected = '[' + k + ']';
+        out[name] = function (arg, msg) {
+            if (arg === undefined || arg === null) {
+                return;
+            }
+            if (!Array.isArray(arg)) {
+                _toss(msg, expected, type.operator, arg, type.actual);
+            }
+            var i;
+            for (i = 0; i < arg.length; i++) {
+                if (!type.check(arg[i])) {
+                    _toss(msg, expected, type.operator, arg, type.actual);
+                }
+            }
+        };
+    });
+
+    /* re-export built-in assertions */
+    Object.keys(assert).forEach(function (k) {
+        if (k === 'AssertionError') {
+            out[k] = assert[k];
+            return;
+        }
+        if (ndebug) {
+            out[k] = noop;
+            return;
+        }
+        out[k] = assert[k];
+    });
+
+    /* export ourselves (for unit tests _only_) */
+    out._setExports = _setExports;
+
+    return out;
+}
+
+module.exports = _setExports(process.env.NODE_NDEBUG);
+
+
+/***/ }),
 /* 758 */
 /***/ (function(module) {
 
@@ -31298,12 +38898,55 @@ module.exports = require("zlib");
 
 /***/ }),
 /* 762 */,
-/* 763 */,
+/* 763 */
+/***/ (function(module) {
+
+module.exports = removeHook
+
+function removeHook (state, name, method) {
+  if (!state.registry[name]) {
+    return
+  }
+
+  var index = state.registry[name]
+    .map(function (registered) { return registered.orig })
+    .indexOf(method)
+
+  if (index === -1) {
+    return
+  }
+
+  state.registry[name].splice(index, 1)
+}
+
+
+/***/ }),
 /* 764 */,
 /* 765 */,
 /* 766 */,
 /* 767 */,
-/* 768 */,
+/* 768 */
+/***/ (function(module) {
+
+"use strict";
+
+module.exports = function (x) {
+	var lf = typeof x === 'string' ? '\n' : '\n'.charCodeAt();
+	var cr = typeof x === 'string' ? '\r' : '\r'.charCodeAt();
+
+	if (x[x.length - 1] === lf) {
+		x = x.slice(0, x.length - 1);
+	}
+
+	if (x[x.length - 1] === cr) {
+		x = x.slice(0, x.length - 1);
+	}
+
+	return x;
+};
+
+
+/***/ }),
 /* 769 */,
 /* 770 */,
 /* 771 */,
@@ -31405,7 +39048,19 @@ module.exports = function generate__limitLength(it, $keyword, $ruleType) {
 module.exports = {"$id":"creator.json#","$schema":"http://json-schema.org/draft-06/schema#","type":"object","required":["name","version"],"properties":{"name":{"type":"string"},"version":{"type":"string"},"comment":{"type":"string"}}};
 
 /***/ }),
-/* 777 */,
+/* 777 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = getFirstPage
+
+const getPage = __webpack_require__(265)
+
+function getFirstPage (octokit, link, headers) {
+  return getPage(octokit, link, 'first', headers)
+}
+
+
+/***/ }),
 /* 778 */,
 /* 779 */
 /***/ (function(__unusedmodule, exports, __webpack_require__) {
@@ -31851,7 +39506,7 @@ module.exports = function (Promise, apiRejection, tryConvertToPromise,
 var parser = __webpack_require__(342);
 var signer = __webpack_require__(64);
 var verify = __webpack_require__(428);
-var utils = __webpack_require__(909);
+var utils = __webpack_require__(161);
 
 
 
@@ -32027,7 +39682,35 @@ function createConnectionSSL (port, host, options) {
 /* 793 */,
 /* 794 */,
 /* 795 */,
-/* 796 */,
+/* 796 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, '__esModule', { value: true });
+
+function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
+
+var osName = _interopDefault(__webpack_require__(2));
+
+function getUserAgent() {
+  try {
+    return `Node.js/${process.version.substr(1)} (${osName()}; ${process.arch})`;
+  } catch (error) {
+    if (/wmic os get Caption/.test(error.message)) {
+      return "Windows <version undetectable>";
+    }
+
+    throw error;
+  }
+}
+
+exports.getUserAgent = getUserAgent;
+//# sourceMappingURL=index.js.map
+
+
+/***/ }),
 /* 797 */,
 /* 798 */,
 /* 799 */,
@@ -32035,7 +39718,327 @@ function createConnectionSSL (port, host, options) {
 /* 801 */,
 /* 802 */,
 /* 803 */,
-/* 804 */,
+/* 804 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+module.exports = function(Promise, INTERNAL) {
+var THIS = {};
+var util = __webpack_require__(248);
+var nodebackForPromise = __webpack_require__(663);
+var withAppended = util.withAppended;
+var maybeWrapAsError = util.maybeWrapAsError;
+var canEvaluate = util.canEvaluate;
+var TypeError = __webpack_require__(607).TypeError;
+var defaultSuffix = "Async";
+var defaultPromisified = {__isPromisified__: true};
+var noCopyProps = [
+    "arity",    "length",
+    "name",
+    "arguments",
+    "caller",
+    "callee",
+    "prototype",
+    "__isPromisified__"
+];
+var noCopyPropsPattern = new RegExp("^(?:" + noCopyProps.join("|") + ")$");
+
+var defaultFilter = function(name) {
+    return util.isIdentifier(name) &&
+        name.charAt(0) !== "_" &&
+        name !== "constructor";
+};
+
+function propsFilter(key) {
+    return !noCopyPropsPattern.test(key);
+}
+
+function isPromisified(fn) {
+    try {
+        return fn.__isPromisified__ === true;
+    }
+    catch (e) {
+        return false;
+    }
+}
+
+function hasPromisified(obj, key, suffix) {
+    var val = util.getDataPropertyOrDefault(obj, key + suffix,
+                                            defaultPromisified);
+    return val ? isPromisified(val) : false;
+}
+function checkValid(ret, suffix, suffixRegexp) {
+    for (var i = 0; i < ret.length; i += 2) {
+        var key = ret[i];
+        if (suffixRegexp.test(key)) {
+            var keyWithoutAsyncSuffix = key.replace(suffixRegexp, "");
+            for (var j = 0; j < ret.length; j += 2) {
+                if (ret[j] === keyWithoutAsyncSuffix) {
+                    throw new TypeError("Cannot promisify an API that has normal methods with '%s'-suffix\u000a\u000a    See http://goo.gl/MqrFmX\u000a"
+                        .replace("%s", suffix));
+                }
+            }
+        }
+    }
+}
+
+function promisifiableMethods(obj, suffix, suffixRegexp, filter) {
+    var keys = util.inheritedDataKeys(obj);
+    var ret = [];
+    for (var i = 0; i < keys.length; ++i) {
+        var key = keys[i];
+        var value = obj[key];
+        var passesDefaultFilter = filter === defaultFilter
+            ? true : defaultFilter(key, value, obj);
+        if (typeof value === "function" &&
+            !isPromisified(value) &&
+            !hasPromisified(obj, key, suffix) &&
+            filter(key, value, obj, passesDefaultFilter)) {
+            ret.push(key, value);
+        }
+    }
+    checkValid(ret, suffix, suffixRegexp);
+    return ret;
+}
+
+var escapeIdentRegex = function(str) {
+    return str.replace(/([$])/, "\\$");
+};
+
+var makeNodePromisifiedEval;
+if (true) {
+var switchCaseArgumentOrder = function(likelyArgumentCount) {
+    var ret = [likelyArgumentCount];
+    var min = Math.max(0, likelyArgumentCount - 1 - 3);
+    for(var i = likelyArgumentCount - 1; i >= min; --i) {
+        ret.push(i);
+    }
+    for(var i = likelyArgumentCount + 1; i <= 3; ++i) {
+        ret.push(i);
+    }
+    return ret;
+};
+
+var argumentSequence = function(argumentCount) {
+    return util.filledRange(argumentCount, "_arg", "");
+};
+
+var parameterDeclaration = function(parameterCount) {
+    return util.filledRange(
+        Math.max(parameterCount, 3), "_arg", "");
+};
+
+var parameterCount = function(fn) {
+    if (typeof fn.length === "number") {
+        return Math.max(Math.min(fn.length, 1023 + 1), 0);
+    }
+    return 0;
+};
+
+makeNodePromisifiedEval =
+function(callback, receiver, originalName, fn, _, multiArgs) {
+    var newParameterCount = Math.max(0, parameterCount(fn) - 1);
+    var argumentOrder = switchCaseArgumentOrder(newParameterCount);
+    var shouldProxyThis = typeof callback === "string" || receiver === THIS;
+
+    function generateCallForArgumentCount(count) {
+        var args = argumentSequence(count).join(", ");
+        var comma = count > 0 ? ", " : "";
+        var ret;
+        if (shouldProxyThis) {
+            ret = "ret = callback.call(this, {{args}}, nodeback); break;\n";
+        } else {
+            ret = receiver === undefined
+                ? "ret = callback({{args}}, nodeback); break;\n"
+                : "ret = callback.call(receiver, {{args}}, nodeback); break;\n";
+        }
+        return ret.replace("{{args}}", args).replace(", ", comma);
+    }
+
+    function generateArgumentSwitchCase() {
+        var ret = "";
+        for (var i = 0; i < argumentOrder.length; ++i) {
+            ret += "case " + argumentOrder[i] +":" +
+                generateCallForArgumentCount(argumentOrder[i]);
+        }
+
+        ret += "                                                             \n\
+        default:                                                             \n\
+            var args = new Array(len + 1);                                   \n\
+            var i = 0;                                                       \n\
+            for (var i = 0; i < len; ++i) {                                  \n\
+               args[i] = arguments[i];                                       \n\
+            }                                                                \n\
+            args[i] = nodeback;                                              \n\
+            [CodeForCall]                                                    \n\
+            break;                                                           \n\
+        ".replace("[CodeForCall]", (shouldProxyThis
+                                ? "ret = callback.apply(this, args);\n"
+                                : "ret = callback.apply(receiver, args);\n"));
+        return ret;
+    }
+
+    var getFunctionCode = typeof callback === "string"
+                                ? ("this != null ? this['"+callback+"'] : fn")
+                                : "fn";
+    var body = "'use strict';                                                \n\
+        var ret = function (Parameters) {                                    \n\
+            'use strict';                                                    \n\
+            var len = arguments.length;                                      \n\
+            var promise = new Promise(INTERNAL);                             \n\
+            promise._captureStackTrace();                                    \n\
+            var nodeback = nodebackForPromise(promise, " + multiArgs + ");   \n\
+            var ret;                                                         \n\
+            var callback = tryCatch([GetFunctionCode]);                      \n\
+            switch(len) {                                                    \n\
+                [CodeForSwitchCase]                                          \n\
+            }                                                                \n\
+            if (ret === errorObj) {                                          \n\
+                promise._rejectCallback(maybeWrapAsError(ret.e), true, true);\n\
+            }                                                                \n\
+            if (!promise._isFateSealed()) promise._setAsyncGuaranteed();     \n\
+            return promise;                                                  \n\
+        };                                                                   \n\
+        notEnumerableProp(ret, '__isPromisified__', true);                   \n\
+        return ret;                                                          \n\
+    ".replace("[CodeForSwitchCase]", generateArgumentSwitchCase())
+        .replace("[GetFunctionCode]", getFunctionCode);
+    body = body.replace("Parameters", parameterDeclaration(newParameterCount));
+    return new Function("Promise",
+                        "fn",
+                        "receiver",
+                        "withAppended",
+                        "maybeWrapAsError",
+                        "nodebackForPromise",
+                        "tryCatch",
+                        "errorObj",
+                        "notEnumerableProp",
+                        "INTERNAL",
+                        body)(
+                    Promise,
+                    fn,
+                    receiver,
+                    withAppended,
+                    maybeWrapAsError,
+                    nodebackForPromise,
+                    util.tryCatch,
+                    util.errorObj,
+                    util.notEnumerableProp,
+                    INTERNAL);
+};
+}
+
+function makeNodePromisifiedClosure(callback, receiver, _, fn, __, multiArgs) {
+    var defaultThis = (function() {return this;})();
+    var method = callback;
+    if (typeof method === "string") {
+        callback = fn;
+    }
+    function promisified() {
+        var _receiver = receiver;
+        if (receiver === THIS) _receiver = this;
+        var promise = new Promise(INTERNAL);
+        promise._captureStackTrace();
+        var cb = typeof method === "string" && this !== defaultThis
+            ? this[method] : callback;
+        var fn = nodebackForPromise(promise, multiArgs);
+        try {
+            cb.apply(_receiver, withAppended(arguments, fn));
+        } catch(e) {
+            promise._rejectCallback(maybeWrapAsError(e), true, true);
+        }
+        if (!promise._isFateSealed()) promise._setAsyncGuaranteed();
+        return promise;
+    }
+    util.notEnumerableProp(promisified, "__isPromisified__", true);
+    return promisified;
+}
+
+var makeNodePromisified = canEvaluate
+    ? makeNodePromisifiedEval
+    : makeNodePromisifiedClosure;
+
+function promisifyAll(obj, suffix, filter, promisifier, multiArgs) {
+    var suffixRegexp = new RegExp(escapeIdentRegex(suffix) + "$");
+    var methods =
+        promisifiableMethods(obj, suffix, suffixRegexp, filter);
+
+    for (var i = 0, len = methods.length; i < len; i+= 2) {
+        var key = methods[i];
+        var fn = methods[i+1];
+        var promisifiedKey = key + suffix;
+        if (promisifier === makeNodePromisified) {
+            obj[promisifiedKey] =
+                makeNodePromisified(key, THIS, key, fn, suffix, multiArgs);
+        } else {
+            var promisified = promisifier(fn, function() {
+                return makeNodePromisified(key, THIS, key,
+                                           fn, suffix, multiArgs);
+            });
+            util.notEnumerableProp(promisified, "__isPromisified__", true);
+            obj[promisifiedKey] = promisified;
+        }
+    }
+    util.toFastProperties(obj);
+    return obj;
+}
+
+function promisify(callback, receiver, multiArgs) {
+    return makeNodePromisified(callback, receiver, undefined,
+                                callback, null, multiArgs);
+}
+
+Promise.promisify = function (fn, options) {
+    if (typeof fn !== "function") {
+        throw new TypeError("expecting a function but got " + util.classString(fn));
+    }
+    if (isPromisified(fn)) {
+        return fn;
+    }
+    options = Object(options);
+    var receiver = options.context === undefined ? THIS : options.context;
+    var multiArgs = !!options.multiArgs;
+    var ret = promisify(fn, receiver, multiArgs);
+    util.copyDescriptors(fn, ret, propsFilter);
+    return ret;
+};
+
+Promise.promisifyAll = function (target, options) {
+    if (typeof target !== "function" && typeof target !== "object") {
+        throw new TypeError("the target of promisifyAll must be an object or a function\u000a\u000a    See http://goo.gl/MqrFmX\u000a");
+    }
+    options = Object(options);
+    var multiArgs = !!options.multiArgs;
+    var suffix = options.suffix;
+    if (typeof suffix !== "string") suffix = defaultSuffix;
+    var filter = options.filter;
+    if (typeof filter !== "function") filter = defaultFilter;
+    var promisifier = options.promisifier;
+    if (typeof promisifier !== "function") promisifier = makeNodePromisified;
+
+    if (!util.isIdentifier(suffix)) {
+        throw new RangeError("suffix must be a valid identifier\u000a\u000a    See http://goo.gl/MqrFmX\u000a");
+    }
+
+    var keys = util.inheritedDataKeys(target);
+    for (var i = 0; i < keys.length; ++i) {
+        var value = target[keys[i]];
+        if (keys[i] !== "constructor" &&
+            util.isClass(value)) {
+            promisifyAll(value.prototype, suffix, filter, promisifier,
+                multiArgs);
+            promisifyAll(value, suffix, filter, promisifier, multiArgs);
+        }
+    }
+
+    return promisifyAll(target, suffix, filter, promisifier, multiArgs);
+};
+};
+
+
+
+/***/ }),
 /* 805 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
@@ -32043,7 +40046,7 @@ function createConnectionSSL (port, host, options) {
 
 
 var resolve = __webpack_require__(867)
-  , util = __webpack_require__(855)
+  , util = __webpack_require__(949)
   , errorClasses = __webpack_require__(844)
   , stableStringify = __webpack_require__(741);
 
@@ -32430,7 +40433,38 @@ function vars(arr, statement) {
 
 
 /***/ }),
-/* 806 */,
+/* 806 */
+/***/ (function(module) {
+
+/**
+ * Checks if `value` is classified as an `Array` object.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an array, else `false`.
+ * @example
+ *
+ * _.isArray([1, 2, 3]);
+ * // => true
+ *
+ * _.isArray(document.body.children);
+ * // => false
+ *
+ * _.isArray('abc');
+ * // => false
+ *
+ * _.isArray(_.noop);
+ * // => false
+ */
+var isArray = Array.isArray;
+
+module.exports = isArray;
+
+
+/***/ }),
 /* 807 */,
 /* 808 */,
 /* 809 */
@@ -32681,205 +40715,261 @@ exports.defer = defer
 /* 811 */,
 /* 812 */,
 /* 813 */
-/***/ (function(module) {
+/***/ (function(__unusedmodule, exports) {
 
-module.exports = {"$id":"query.json#","$schema":"http://json-schema.org/draft-06/schema#","type":"object","required":["name","value"],"properties":{"name":{"type":"string"},"value":{"type":"string"},"comment":{"type":"string"}}};
+"use strict";
+
+
+Object.defineProperty(exports, '__esModule', { value: true });
+
+async function auth(token) {
+  const tokenType = token.split(/\./).length === 3 ? "app" : /^v\d+\./.test(token) ? "installation" : "oauth";
+  return {
+    type: "token",
+    token: token,
+    tokenType
+  };
+}
+
+/**
+ * Prefix token for usage in the Authorization header
+ *
+ * @param token OAuth token or JSON Web Token
+ */
+function withAuthorizationPrefix(token) {
+  if (token.split(/\./).length === 3) {
+    return `bearer ${token}`;
+  }
+
+  return `token ${token}`;
+}
+
+async function hook(token, request, route, parameters) {
+  const endpoint = request.endpoint.merge(route, parameters);
+  endpoint.headers.authorization = withAuthorizationPrefix(token);
+  return request(endpoint);
+}
+
+const createTokenAuth = function createTokenAuth(token) {
+  if (!token) {
+    throw new Error("[@octokit/auth-token] No token passed to createTokenAuth");
+  }
+
+  if (typeof token !== "string") {
+    throw new Error("[@octokit/auth-token] Token passed to createTokenAuth is not a string");
+  }
+
+  token = token.replace(/^(token|bearer) +/i, "");
+  return Object.assign(auth.bind(null, token), {
+    hook: hook.bind(null, token)
+  });
+};
+
+exports.createTokenAuth = createTokenAuth;
+//# sourceMappingURL=index.js.map
+
 
 /***/ }),
 /* 814 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
-"use strict";
+module.exports = which
+which.sync = whichSync
 
-module.exports = function(Promise,
-                          PromiseArray,
-                          apiRejection,
-                          tryConvertToPromise,
-                          INTERNAL,
-                          debug) {
-var util = __webpack_require__(248);
-var tryCatch = util.tryCatch;
+var isWindows = process.platform === 'win32' ||
+    process.env.OSTYPE === 'cygwin' ||
+    process.env.OSTYPE === 'msys'
 
-function ReductionPromiseArray(promises, fn, initialValue, _each) {
-    this.constructor$(promises);
-    var context = Promise._getContext();
-    this._fn = util.contextBind(context, fn);
-    if (initialValue !== undefined) {
-        initialValue = Promise.resolve(initialValue);
-        initialValue._attachCancellationCallback(this);
-    }
-    this._initialValue = initialValue;
-    this._currentCancellable = null;
-    if(_each === INTERNAL) {
-        this._eachValues = Array(this._length);
-    } else if (_each === 0) {
-        this._eachValues = null;
-    } else {
-        this._eachValues = undefined;
-    }
-    this._promise._captureStackTrace();
-    this._init$(undefined, -5);
+var path = __webpack_require__(622)
+var COLON = isWindows ? ';' : ':'
+var isexe = __webpack_require__(742)
+
+function getNotFoundError (cmd) {
+  var er = new Error('not found: ' + cmd)
+  er.code = 'ENOENT'
+
+  return er
 }
-util.inherits(ReductionPromiseArray, PromiseArray);
 
-ReductionPromiseArray.prototype._gotAccum = function(accum) {
-    if (this._eachValues !== undefined &&
-        this._eachValues !== null &&
-        accum !== INTERNAL) {
-        this._eachValues.push(accum);
-    }
-};
+function getPathInfo (cmd, opt) {
+  var colon = opt.colon || COLON
+  var pathEnv = opt.path || process.env.PATH || ''
+  var pathExt = ['']
 
-ReductionPromiseArray.prototype._eachComplete = function(value) {
-    if (this._eachValues !== null) {
-        this._eachValues.push(value);
-    }
-    return this._eachValues;
-};
+  pathEnv = pathEnv.split(colon)
 
-ReductionPromiseArray.prototype._init = function() {};
+  var pathExtExe = ''
+  if (isWindows) {
+    pathEnv.unshift(process.cwd())
+    pathExtExe = (opt.pathExt || process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM')
+    pathExt = pathExtExe.split(colon)
 
-ReductionPromiseArray.prototype._resolveEmptyArray = function() {
-    this._resolve(this._eachValues !== undefined ? this._eachValues
-                                                 : this._initialValue);
-};
 
-ReductionPromiseArray.prototype.shouldCopyValues = function () {
-    return false;
-};
+    // Always test the cmd itself first.  isexe will check to make sure
+    // it's found in the pathExt set.
+    if (cmd.indexOf('.') !== -1 && pathExt[0] !== '')
+      pathExt.unshift('')
+  }
 
-ReductionPromiseArray.prototype._resolve = function(value) {
-    this._promise._resolveCallback(value);
-    this._values = null;
-};
+  // If it has a slash, then we don't bother searching the pathenv.
+  // just check the file itself, and that's it.
+  if (cmd.match(/\//) || isWindows && cmd.match(/\\/))
+    pathEnv = ['']
 
-ReductionPromiseArray.prototype._resultCancelled = function(sender) {
-    if (sender === this._initialValue) return this._cancel();
-    if (this._isResolved()) return;
-    this._resultCancelled$();
-    if (this._currentCancellable instanceof Promise) {
-        this._currentCancellable.cancel();
-    }
-    if (this._initialValue instanceof Promise) {
-        this._initialValue.cancel();
-    }
-};
+  return {
+    env: pathEnv,
+    ext: pathExt,
+    extExe: pathExtExe
+  }
+}
 
-ReductionPromiseArray.prototype._iterate = function (values) {
-    this._values = values;
-    var value;
-    var i;
-    var length = values.length;
-    if (this._initialValue !== undefined) {
-        value = this._initialValue;
-        i = 0;
-    } else {
-        value = Promise.resolve(values[0]);
-        i = 1;
+function which (cmd, opt, cb) {
+  if (typeof opt === 'function') {
+    cb = opt
+    opt = {}
+  }
+
+  var info = getPathInfo(cmd, opt)
+  var pathEnv = info.env
+  var pathExt = info.ext
+  var pathExtExe = info.extExe
+  var found = []
+
+  ;(function F (i, l) {
+    if (i === l) {
+      if (opt.all && found.length)
+        return cb(null, found)
+      else
+        return cb(getNotFoundError(cmd))
     }
 
-    this._currentCancellable = value;
+    var pathPart = pathEnv[i]
+    if (pathPart.charAt(0) === '"' && pathPart.slice(-1) === '"')
+      pathPart = pathPart.slice(1, -1)
 
-    for (var j = i; j < length; ++j) {
-        var maybePromise = values[j];
-        if (maybePromise instanceof Promise) {
-            maybePromise.suppressUnhandledRejections();
+    var p = path.join(pathPart, cmd)
+    if (!pathPart && (/^\.[\\\/]/).test(cmd)) {
+      p = cmd.slice(0, 2) + p
+    }
+    ;(function E (ii, ll) {
+      if (ii === ll) return F(i + 1, l)
+      var ext = pathExt[ii]
+      isexe(p + ext, { pathExt: pathExtExe }, function (er, is) {
+        if (!er && is) {
+          if (opt.all)
+            found.push(p + ext)
+          else
+            return cb(null, p + ext)
         }
+        return E(ii + 1, ll)
+      })
+    })(0, pathExt.length)
+  })(0, pathEnv.length)
+}
+
+function whichSync (cmd, opt) {
+  opt = opt || {}
+
+  var info = getPathInfo(cmd, opt)
+  var pathEnv = info.env
+  var pathExt = info.ext
+  var pathExtExe = info.extExe
+  var found = []
+
+  for (var i = 0, l = pathEnv.length; i < l; i ++) {
+    var pathPart = pathEnv[i]
+    if (pathPart.charAt(0) === '"' && pathPart.slice(-1) === '"')
+      pathPart = pathPart.slice(1, -1)
+
+    var p = path.join(pathPart, cmd)
+    if (!pathPart && /^\.[\\\/]/.test(cmd)) {
+      p = cmd.slice(0, 2) + p
     }
-
-    if (!value.isRejected()) {
-        for (; i < length; ++i) {
-            var ctx = {
-                accum: null,
-                value: values[i],
-                index: i,
-                length: length,
-                array: this
-            };
-
-            value = value._then(gotAccum, undefined, undefined, ctx, undefined);
-
-            if ((i & 127) === 0) {
-                value._setNoAsyncGuarantee();
-            }
+    for (var j = 0, ll = pathExt.length; j < ll; j ++) {
+      var cur = p + pathExt[j]
+      var is
+      try {
+        is = isexe.sync(cur, { pathExt: pathExtExe })
+        if (is) {
+          if (opt.all)
+            found.push(cur)
+          else
+            return cur
         }
+      } catch (ex) {}
     }
+  }
 
-    if (this._eachValues !== undefined) {
-        value = value
-            ._then(this._eachComplete, undefined, undefined, this, undefined);
-    }
-    value._then(completed, completed, undefined, value, this);
-};
+  if (opt.all && found.length)
+    return found
 
-Promise.prototype.reduce = function (fn, initialValue) {
-    return reduce(this, fn, initialValue, null);
-};
+  if (opt.nothrow)
+    return null
 
-Promise.reduce = function (promises, fn, initialValue, _each) {
-    return reduce(promises, fn, initialValue, _each);
-};
-
-function completed(valueOrReason, array) {
-    if (this.isFulfilled()) {
-        array._resolve(valueOrReason);
-    } else {
-        array._reject(valueOrReason);
-    }
+  throw getNotFoundError(cmd)
 }
-
-function reduce(promises, fn, initialValue, _each) {
-    if (typeof fn !== "function") {
-        return apiRejection("expecting a function but got " + util.classString(fn));
-    }
-    var array = new ReductionPromiseArray(promises, fn, initialValue, _each);
-    return array.promise();
-}
-
-function gotAccum(accum) {
-    this.accum = accum;
-    this.array._gotAccum(accum);
-    var value = tryConvertToPromise(this.value, this.array._promise);
-    if (value instanceof Promise) {
-        this.array._currentCancellable = value;
-        return value._then(gotValue, undefined, undefined, this, undefined);
-    } else {
-        return gotValue.call(this, value);
-    }
-}
-
-function gotValue(value) {
-    var array = this.array;
-    var promise = array._promise;
-    var fn = tryCatch(array._fn);
-    promise._pushContext();
-    var ret;
-    if (array._eachValues !== undefined) {
-        ret = fn.call(promise._boundValue(), value, this.index, this.length);
-    } else {
-        ret = fn.call(promise._boundValue(),
-                              this.accum, value, this.index, this.length);
-    }
-    if (ret instanceof Promise) {
-        array._currentCancellable = ret;
-    }
-    var promiseCreated = promise._popContext();
-    debug.checkForgottenReturns(
-        ret,
-        promiseCreated,
-        array._eachValues !== undefined ? "Promise.each" : "Promise.reduce",
-        promise
-    );
-    return ret;
-}
-};
 
 
 /***/ }),
 /* 815 */,
-/* 816 */,
+/* 816 */
+/***/ (function(module) {
+
+"use strict";
+
+module.exports = /^#!.*/;
+
+
+/***/ }),
 /* 817 */,
-/* 818 */,
+/* 818 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = isexe
+isexe.sync = sync
+
+var fs = __webpack_require__(747)
+
+function checkPathExt (path, options) {
+  var pathext = options.pathExt !== undefined ?
+    options.pathExt : process.env.PATHEXT
+
+  if (!pathext) {
+    return true
+  }
+
+  pathext = pathext.split(';')
+  if (pathext.indexOf('') !== -1) {
+    return true
+  }
+  for (var i = 0; i < pathext.length; i++) {
+    var p = pathext[i].toLowerCase()
+    if (p && path.substr(-p.length).toLowerCase() === p) {
+      return true
+    }
+  }
+  return false
+}
+
+function checkStat (stat, path, options) {
+  if (!stat.isSymbolicLink() && !stat.isFile()) {
+    return false
+  }
+  return checkPathExt(path, options)
+}
+
+function isexe (path, options, cb) {
+  fs.stat(path, function (er, stat) {
+    cb(er, er ? false : checkStat(stat, path, options))
+  })
+}
+
+function sync (path, options) {
+  return checkStat(fs.statSync(path), path, options)
+}
+
+
+/***/ }),
 /* 819 */,
 /* 820 */
 /***/ (function(module) {
@@ -33175,15 +41265,13225 @@ module.exports = require("url");
 /* 837 */,
 /* 838 */,
 /* 839 */,
-/* 840 */,
-/* 841 */
-/***/ (function() {
+/* 840 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
 
-eval("require")("youtrack-rest-client");
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const base_1 = __webpack_require__(142);
+const __1 = __webpack_require__(941);
+exports.AgilePaths = {
+    agiles: '/agiles',
+    agile: '/agiles/{agileId}'
+};
+class AgileEndpoint extends base_1.BaseEndpoint {
+    all(paginationOptions = {}) {
+        return this.getResourceWithFields(exports.AgilePaths.agiles, __1.ReducedAgileImpl, { qs: paginationOptions });
+    }
+    byId(agileId) {
+        return this.getResourceWithFields(this.format(exports.AgilePaths.agile, { agileId }), __1.AgileImpl);
+    }
+    delete(agileId) {
+        return this.toPromise(this.client.delete(this.format(exports.AgilePaths.agile, { agileId })));
+    }
+    create(agile) {
+        return this.postResourceWithFields(exports.AgilePaths.agiles, __1.AgileImpl, {
+            body: agile
+        });
+    }
+    update(agile) {
+        return this.postResourceWithFields(this.format(exports.AgilePaths.agile, { agileId: agile.id }), __1.AgileImpl, {
+            body: agile
+        });
+    }
+}
+exports.AgileEndpoint = AgileEndpoint;
 
 
 /***/ }),
-/* 842 */,
+/* 841 */
+/***/ (function(module) {
+
+module.exports = {"$id":"header.json#","$schema":"http://json-schema.org/draft-06/schema#","type":"object","required":["name","value"],"properties":{"name":{"type":"string"},"value":{"type":"string"},"comment":{"type":"string"}}};
+
+/***/ }),
+/* 842 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, '__esModule', { value: true });
+
+var deprecation = __webpack_require__(692);
+
+var endpointsByScope = {
+  actions: {
+    cancelWorkflowRun: {
+      method: "POST",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        run_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/runs/:run_id/cancel"
+    },
+    createOrUpdateSecretForRepo: {
+      method: "PUT",
+      params: {
+        encrypted_value: {
+          type: "string"
+        },
+        key_id: {
+          type: "string"
+        },
+        name: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/secrets/:name"
+    },
+    createRegistrationToken: {
+      method: "POST",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/runners/registration-token"
+    },
+    createRemoveToken: {
+      method: "POST",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/runners/remove-token"
+    },
+    deleteArtifact: {
+      method: "DELETE",
+      params: {
+        artifact_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/artifacts/:artifact_id"
+    },
+    deleteSecretFromRepo: {
+      method: "DELETE",
+      params: {
+        name: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/secrets/:name"
+    },
+    downloadArtifact: {
+      method: "GET",
+      params: {
+        archive_format: {
+          required: true,
+          type: "string"
+        },
+        artifact_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/artifacts/:artifact_id/:archive_format"
+    },
+    getArtifact: {
+      method: "GET",
+      params: {
+        artifact_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/artifacts/:artifact_id"
+    },
+    getPublicKey: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/secrets/public-key"
+    },
+    getSecret: {
+      method: "GET",
+      params: {
+        name: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/secrets/:name"
+    },
+    getSelfHostedRunner: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        runner_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/runners/:runner_id"
+    },
+    getWorkflow: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        workflow_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/workflows/:workflow_id"
+    },
+    getWorkflowJob: {
+      method: "GET",
+      params: {
+        job_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/jobs/:job_id"
+    },
+    getWorkflowRun: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        run_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/runs/:run_id"
+    },
+    listJobsForWorkflowRun: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        run_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/runs/:run_id/jobs"
+    },
+    listRepoWorkflowRuns: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/runs"
+    },
+    listRepoWorkflows: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/workflows"
+    },
+    listSecretsForRepo: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/secrets"
+    },
+    listSelfHostedRunnersForRepo: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/runners"
+    },
+    listWorkflowJobLogs: {
+      method: "GET",
+      params: {
+        job_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/jobs/:job_id/logs"
+    },
+    listWorkflowRunArtifacts: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        run_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/runs/:run_id/artifacts"
+    },
+    listWorkflowRunLogs: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        run_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/runs/:run_id/logs"
+    },
+    listWorkflowRuns: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        workflow_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/workflows/:workflow_id/runs"
+    },
+    reRunWorkflow: {
+      method: "POST",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        run_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/runs/:run_id/rerun"
+    },
+    removeSelfHostedRunner: {
+      method: "DELETE",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        runner_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/actions/runners/:runner_id"
+    }
+  },
+  activity: {
+    checkStarringRepo: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/user/starred/:owner/:repo"
+    },
+    deleteRepoSubscription: {
+      method: "DELETE",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/subscription"
+    },
+    deleteThreadSubscription: {
+      method: "DELETE",
+      params: {
+        thread_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/notifications/threads/:thread_id/subscription"
+    },
+    getRepoSubscription: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/subscription"
+    },
+    getThread: {
+      method: "GET",
+      params: {
+        thread_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/notifications/threads/:thread_id"
+    },
+    getThreadSubscription: {
+      method: "GET",
+      params: {
+        thread_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/notifications/threads/:thread_id/subscription"
+    },
+    listEventsForOrg: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/events/orgs/:org"
+    },
+    listEventsForUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/events"
+    },
+    listFeeds: {
+      method: "GET",
+      params: {},
+      url: "/feeds"
+    },
+    listNotifications: {
+      method: "GET",
+      params: {
+        all: {
+          type: "boolean"
+        },
+        before: {
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        participating: {
+          type: "boolean"
+        },
+        per_page: {
+          type: "integer"
+        },
+        since: {
+          type: "string"
+        }
+      },
+      url: "/notifications"
+    },
+    listNotificationsForRepo: {
+      method: "GET",
+      params: {
+        all: {
+          type: "boolean"
+        },
+        before: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        participating: {
+          type: "boolean"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        since: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/notifications"
+    },
+    listPublicEvents: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/events"
+    },
+    listPublicEventsForOrg: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/orgs/:org/events"
+    },
+    listPublicEventsForRepoNetwork: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/networks/:owner/:repo/events"
+    },
+    listPublicEventsForUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/events/public"
+    },
+    listReceivedEventsForUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/received_events"
+    },
+    listReceivedPublicEventsForUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/received_events/public"
+    },
+    listRepoEvents: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/events"
+    },
+    listReposStarredByAuthenticatedUser: {
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        sort: {
+          enum: ["created", "updated"],
+          type: "string"
+        }
+      },
+      url: "/user/starred"
+    },
+    listReposStarredByUser: {
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        sort: {
+          enum: ["created", "updated"],
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/starred"
+    },
+    listReposWatchedByUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/subscriptions"
+    },
+    listStargazersForRepo: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/stargazers"
+    },
+    listWatchedReposForAuthenticatedUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/user/subscriptions"
+    },
+    listWatchersForRepo: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/subscribers"
+    },
+    markAsRead: {
+      method: "PUT",
+      params: {
+        last_read_at: {
+          type: "string"
+        }
+      },
+      url: "/notifications"
+    },
+    markNotificationsAsReadForRepo: {
+      method: "PUT",
+      params: {
+        last_read_at: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/notifications"
+    },
+    markThreadAsRead: {
+      method: "PATCH",
+      params: {
+        thread_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/notifications/threads/:thread_id"
+    },
+    setRepoSubscription: {
+      method: "PUT",
+      params: {
+        ignored: {
+          type: "boolean"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        subscribed: {
+          type: "boolean"
+        }
+      },
+      url: "/repos/:owner/:repo/subscription"
+    },
+    setThreadSubscription: {
+      method: "PUT",
+      params: {
+        ignored: {
+          type: "boolean"
+        },
+        thread_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/notifications/threads/:thread_id/subscription"
+    },
+    starRepo: {
+      method: "PUT",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/user/starred/:owner/:repo"
+    },
+    unstarRepo: {
+      method: "DELETE",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/user/starred/:owner/:repo"
+    }
+  },
+  apps: {
+    addRepoToInstallation: {
+      headers: {
+        accept: "application/vnd.github.machine-man-preview+json"
+      },
+      method: "PUT",
+      params: {
+        installation_id: {
+          required: true,
+          type: "integer"
+        },
+        repository_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/user/installations/:installation_id/repositories/:repository_id"
+    },
+    checkAccountIsAssociatedWithAny: {
+      method: "GET",
+      params: {
+        account_id: {
+          required: true,
+          type: "integer"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/marketplace_listing/accounts/:account_id"
+    },
+    checkAccountIsAssociatedWithAnyStubbed: {
+      method: "GET",
+      params: {
+        account_id: {
+          required: true,
+          type: "integer"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/marketplace_listing/stubbed/accounts/:account_id"
+    },
+    checkAuthorization: {
+      deprecated: "octokit.apps.checkAuthorization() is deprecated, see https://developer.github.com/v3/apps/oauth_applications/#check-an-authorization",
+      method: "GET",
+      params: {
+        access_token: {
+          required: true,
+          type: "string"
+        },
+        client_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/applications/:client_id/tokens/:access_token"
+    },
+    checkToken: {
+      headers: {
+        accept: "application/vnd.github.doctor-strange-preview+json"
+      },
+      method: "POST",
+      params: {
+        access_token: {
+          type: "string"
+        },
+        client_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/applications/:client_id/token"
+    },
+    createContentAttachment: {
+      headers: {
+        accept: "application/vnd.github.corsair-preview+json"
+      },
+      method: "POST",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        content_reference_id: {
+          required: true,
+          type: "integer"
+        },
+        title: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/content_references/:content_reference_id/attachments"
+    },
+    createFromManifest: {
+      headers: {
+        accept: "application/vnd.github.fury-preview+json"
+      },
+      method: "POST",
+      params: {
+        code: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/app-manifests/:code/conversions"
+    },
+    createInstallationToken: {
+      headers: {
+        accept: "application/vnd.github.machine-man-preview+json"
+      },
+      method: "POST",
+      params: {
+        installation_id: {
+          required: true,
+          type: "integer"
+        },
+        permissions: {
+          type: "object"
+        },
+        repository_ids: {
+          type: "integer[]"
+        }
+      },
+      url: "/app/installations/:installation_id/access_tokens"
+    },
+    deleteAuthorization: {
+      headers: {
+        accept: "application/vnd.github.doctor-strange-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        access_token: {
+          type: "string"
+        },
+        client_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/applications/:client_id/grant"
+    },
+    deleteInstallation: {
+      headers: {
+        accept: "application/vnd.github.gambit-preview+json,application/vnd.github.machine-man-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        installation_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/app/installations/:installation_id"
+    },
+    deleteToken: {
+      headers: {
+        accept: "application/vnd.github.doctor-strange-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        access_token: {
+          type: "string"
+        },
+        client_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/applications/:client_id/token"
+    },
+    findOrgInstallation: {
+      deprecated: "octokit.apps.findOrgInstallation() has been renamed to octokit.apps.getOrgInstallation() (2019-04-10)",
+      headers: {
+        accept: "application/vnd.github.machine-man-preview+json"
+      },
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/installation"
+    },
+    findRepoInstallation: {
+      deprecated: "octokit.apps.findRepoInstallation() has been renamed to octokit.apps.getRepoInstallation() (2019-04-10)",
+      headers: {
+        accept: "application/vnd.github.machine-man-preview+json"
+      },
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/installation"
+    },
+    findUserInstallation: {
+      deprecated: "octokit.apps.findUserInstallation() has been renamed to octokit.apps.getUserInstallation() (2019-04-10)",
+      headers: {
+        accept: "application/vnd.github.machine-man-preview+json"
+      },
+      method: "GET",
+      params: {
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/installation"
+    },
+    getAuthenticated: {
+      headers: {
+        accept: "application/vnd.github.machine-man-preview+json"
+      },
+      method: "GET",
+      params: {},
+      url: "/app"
+    },
+    getBySlug: {
+      headers: {
+        accept: "application/vnd.github.machine-man-preview+json"
+      },
+      method: "GET",
+      params: {
+        app_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/apps/:app_slug"
+    },
+    getInstallation: {
+      headers: {
+        accept: "application/vnd.github.machine-man-preview+json"
+      },
+      method: "GET",
+      params: {
+        installation_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/app/installations/:installation_id"
+    },
+    getOrgInstallation: {
+      headers: {
+        accept: "application/vnd.github.machine-man-preview+json"
+      },
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/installation"
+    },
+    getRepoInstallation: {
+      headers: {
+        accept: "application/vnd.github.machine-man-preview+json"
+      },
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/installation"
+    },
+    getUserInstallation: {
+      headers: {
+        accept: "application/vnd.github.machine-man-preview+json"
+      },
+      method: "GET",
+      params: {
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/installation"
+    },
+    listAccountsUserOrOrgOnPlan: {
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        plan_id: {
+          required: true,
+          type: "integer"
+        },
+        sort: {
+          enum: ["created", "updated"],
+          type: "string"
+        }
+      },
+      url: "/marketplace_listing/plans/:plan_id/accounts"
+    },
+    listAccountsUserOrOrgOnPlanStubbed: {
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        plan_id: {
+          required: true,
+          type: "integer"
+        },
+        sort: {
+          enum: ["created", "updated"],
+          type: "string"
+        }
+      },
+      url: "/marketplace_listing/stubbed/plans/:plan_id/accounts"
+    },
+    listInstallationReposForAuthenticatedUser: {
+      headers: {
+        accept: "application/vnd.github.machine-man-preview+json"
+      },
+      method: "GET",
+      params: {
+        installation_id: {
+          required: true,
+          type: "integer"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/user/installations/:installation_id/repositories"
+    },
+    listInstallations: {
+      headers: {
+        accept: "application/vnd.github.machine-man-preview+json"
+      },
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/app/installations"
+    },
+    listInstallationsForAuthenticatedUser: {
+      headers: {
+        accept: "application/vnd.github.machine-man-preview+json"
+      },
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/user/installations"
+    },
+    listMarketplacePurchasesForAuthenticatedUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/user/marketplace_purchases"
+    },
+    listMarketplacePurchasesForAuthenticatedUserStubbed: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/user/marketplace_purchases/stubbed"
+    },
+    listPlans: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/marketplace_listing/plans"
+    },
+    listPlansStubbed: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/marketplace_listing/stubbed/plans"
+    },
+    listRepos: {
+      headers: {
+        accept: "application/vnd.github.machine-man-preview+json"
+      },
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/installation/repositories"
+    },
+    removeRepoFromInstallation: {
+      headers: {
+        accept: "application/vnd.github.machine-man-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        installation_id: {
+          required: true,
+          type: "integer"
+        },
+        repository_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/user/installations/:installation_id/repositories/:repository_id"
+    },
+    resetAuthorization: {
+      deprecated: "octokit.apps.resetAuthorization() is deprecated, see https://developer.github.com/v3/apps/oauth_applications/#reset-an-authorization",
+      method: "POST",
+      params: {
+        access_token: {
+          required: true,
+          type: "string"
+        },
+        client_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/applications/:client_id/tokens/:access_token"
+    },
+    resetToken: {
+      headers: {
+        accept: "application/vnd.github.doctor-strange-preview+json"
+      },
+      method: "PATCH",
+      params: {
+        access_token: {
+          type: "string"
+        },
+        client_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/applications/:client_id/token"
+    },
+    revokeAuthorizationForApplication: {
+      deprecated: "octokit.apps.revokeAuthorizationForApplication() is deprecated, see https://developer.github.com/v3/apps/oauth_applications/#revoke-an-authorization-for-an-application",
+      method: "DELETE",
+      params: {
+        access_token: {
+          required: true,
+          type: "string"
+        },
+        client_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/applications/:client_id/tokens/:access_token"
+    },
+    revokeGrantForApplication: {
+      deprecated: "octokit.apps.revokeGrantForApplication() is deprecated, see https://developer.github.com/v3/apps/oauth_applications/#revoke-a-grant-for-an-application",
+      method: "DELETE",
+      params: {
+        access_token: {
+          required: true,
+          type: "string"
+        },
+        client_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/applications/:client_id/grants/:access_token"
+    },
+    revokeInstallationToken: {
+      headers: {
+        accept: "application/vnd.github.gambit-preview+json"
+      },
+      method: "DELETE",
+      params: {},
+      url: "/installation/token"
+    }
+  },
+  checks: {
+    create: {
+      headers: {
+        accept: "application/vnd.github.antiope-preview+json"
+      },
+      method: "POST",
+      params: {
+        actions: {
+          type: "object[]"
+        },
+        "actions[].description": {
+          required: true,
+          type: "string"
+        },
+        "actions[].identifier": {
+          required: true,
+          type: "string"
+        },
+        "actions[].label": {
+          required: true,
+          type: "string"
+        },
+        completed_at: {
+          type: "string"
+        },
+        conclusion: {
+          enum: ["success", "failure", "neutral", "cancelled", "timed_out", "action_required"],
+          type: "string"
+        },
+        details_url: {
+          type: "string"
+        },
+        external_id: {
+          type: "string"
+        },
+        head_sha: {
+          required: true,
+          type: "string"
+        },
+        name: {
+          required: true,
+          type: "string"
+        },
+        output: {
+          type: "object"
+        },
+        "output.annotations": {
+          type: "object[]"
+        },
+        "output.annotations[].annotation_level": {
+          enum: ["notice", "warning", "failure"],
+          required: true,
+          type: "string"
+        },
+        "output.annotations[].end_column": {
+          type: "integer"
+        },
+        "output.annotations[].end_line": {
+          required: true,
+          type: "integer"
+        },
+        "output.annotations[].message": {
+          required: true,
+          type: "string"
+        },
+        "output.annotations[].path": {
+          required: true,
+          type: "string"
+        },
+        "output.annotations[].raw_details": {
+          type: "string"
+        },
+        "output.annotations[].start_column": {
+          type: "integer"
+        },
+        "output.annotations[].start_line": {
+          required: true,
+          type: "integer"
+        },
+        "output.annotations[].title": {
+          type: "string"
+        },
+        "output.images": {
+          type: "object[]"
+        },
+        "output.images[].alt": {
+          required: true,
+          type: "string"
+        },
+        "output.images[].caption": {
+          type: "string"
+        },
+        "output.images[].image_url": {
+          required: true,
+          type: "string"
+        },
+        "output.summary": {
+          required: true,
+          type: "string"
+        },
+        "output.text": {
+          type: "string"
+        },
+        "output.title": {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        started_at: {
+          type: "string"
+        },
+        status: {
+          enum: ["queued", "in_progress", "completed"],
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/check-runs"
+    },
+    createSuite: {
+      headers: {
+        accept: "application/vnd.github.antiope-preview+json"
+      },
+      method: "POST",
+      params: {
+        head_sha: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/check-suites"
+    },
+    get: {
+      headers: {
+        accept: "application/vnd.github.antiope-preview+json"
+      },
+      method: "GET",
+      params: {
+        check_run_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/check-runs/:check_run_id"
+    },
+    getSuite: {
+      headers: {
+        accept: "application/vnd.github.antiope-preview+json"
+      },
+      method: "GET",
+      params: {
+        check_suite_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/check-suites/:check_suite_id"
+    },
+    listAnnotations: {
+      headers: {
+        accept: "application/vnd.github.antiope-preview+json"
+      },
+      method: "GET",
+      params: {
+        check_run_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/check-runs/:check_run_id/annotations"
+    },
+    listForRef: {
+      headers: {
+        accept: "application/vnd.github.antiope-preview+json"
+      },
+      method: "GET",
+      params: {
+        check_name: {
+          type: "string"
+        },
+        filter: {
+          enum: ["latest", "all"],
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        ref: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        status: {
+          enum: ["queued", "in_progress", "completed"],
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/commits/:ref/check-runs"
+    },
+    listForSuite: {
+      headers: {
+        accept: "application/vnd.github.antiope-preview+json"
+      },
+      method: "GET",
+      params: {
+        check_name: {
+          type: "string"
+        },
+        check_suite_id: {
+          required: true,
+          type: "integer"
+        },
+        filter: {
+          enum: ["latest", "all"],
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        status: {
+          enum: ["queued", "in_progress", "completed"],
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/check-suites/:check_suite_id/check-runs"
+    },
+    listSuitesForRef: {
+      headers: {
+        accept: "application/vnd.github.antiope-preview+json"
+      },
+      method: "GET",
+      params: {
+        app_id: {
+          type: "integer"
+        },
+        check_name: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        ref: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/commits/:ref/check-suites"
+    },
+    rerequestSuite: {
+      headers: {
+        accept: "application/vnd.github.antiope-preview+json"
+      },
+      method: "POST",
+      params: {
+        check_suite_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/check-suites/:check_suite_id/rerequest"
+    },
+    setSuitesPreferences: {
+      headers: {
+        accept: "application/vnd.github.antiope-preview+json"
+      },
+      method: "PATCH",
+      params: {
+        auto_trigger_checks: {
+          type: "object[]"
+        },
+        "auto_trigger_checks[].app_id": {
+          required: true,
+          type: "integer"
+        },
+        "auto_trigger_checks[].setting": {
+          required: true,
+          type: "boolean"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/check-suites/preferences"
+    },
+    update: {
+      headers: {
+        accept: "application/vnd.github.antiope-preview+json"
+      },
+      method: "PATCH",
+      params: {
+        actions: {
+          type: "object[]"
+        },
+        "actions[].description": {
+          required: true,
+          type: "string"
+        },
+        "actions[].identifier": {
+          required: true,
+          type: "string"
+        },
+        "actions[].label": {
+          required: true,
+          type: "string"
+        },
+        check_run_id: {
+          required: true,
+          type: "integer"
+        },
+        completed_at: {
+          type: "string"
+        },
+        conclusion: {
+          enum: ["success", "failure", "neutral", "cancelled", "timed_out", "action_required"],
+          type: "string"
+        },
+        details_url: {
+          type: "string"
+        },
+        external_id: {
+          type: "string"
+        },
+        name: {
+          type: "string"
+        },
+        output: {
+          type: "object"
+        },
+        "output.annotations": {
+          type: "object[]"
+        },
+        "output.annotations[].annotation_level": {
+          enum: ["notice", "warning", "failure"],
+          required: true,
+          type: "string"
+        },
+        "output.annotations[].end_column": {
+          type: "integer"
+        },
+        "output.annotations[].end_line": {
+          required: true,
+          type: "integer"
+        },
+        "output.annotations[].message": {
+          required: true,
+          type: "string"
+        },
+        "output.annotations[].path": {
+          required: true,
+          type: "string"
+        },
+        "output.annotations[].raw_details": {
+          type: "string"
+        },
+        "output.annotations[].start_column": {
+          type: "integer"
+        },
+        "output.annotations[].start_line": {
+          required: true,
+          type: "integer"
+        },
+        "output.annotations[].title": {
+          type: "string"
+        },
+        "output.images": {
+          type: "object[]"
+        },
+        "output.images[].alt": {
+          required: true,
+          type: "string"
+        },
+        "output.images[].caption": {
+          type: "string"
+        },
+        "output.images[].image_url": {
+          required: true,
+          type: "string"
+        },
+        "output.summary": {
+          required: true,
+          type: "string"
+        },
+        "output.text": {
+          type: "string"
+        },
+        "output.title": {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        started_at: {
+          type: "string"
+        },
+        status: {
+          enum: ["queued", "in_progress", "completed"],
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/check-runs/:check_run_id"
+    }
+  },
+  codesOfConduct: {
+    getConductCode: {
+      headers: {
+        accept: "application/vnd.github.scarlet-witch-preview+json"
+      },
+      method: "GET",
+      params: {
+        key: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/codes_of_conduct/:key"
+    },
+    getForRepo: {
+      headers: {
+        accept: "application/vnd.github.scarlet-witch-preview+json"
+      },
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/community/code_of_conduct"
+    },
+    listConductCodes: {
+      headers: {
+        accept: "application/vnd.github.scarlet-witch-preview+json"
+      },
+      method: "GET",
+      params: {},
+      url: "/codes_of_conduct"
+    }
+  },
+  emojis: {
+    get: {
+      method: "GET",
+      params: {},
+      url: "/emojis"
+    }
+  },
+  gists: {
+    checkIsStarred: {
+      method: "GET",
+      params: {
+        gist_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/gists/:gist_id/star"
+    },
+    create: {
+      method: "POST",
+      params: {
+        description: {
+          type: "string"
+        },
+        files: {
+          required: true,
+          type: "object"
+        },
+        "files.content": {
+          type: "string"
+        },
+        public: {
+          type: "boolean"
+        }
+      },
+      url: "/gists"
+    },
+    createComment: {
+      method: "POST",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        gist_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/gists/:gist_id/comments"
+    },
+    delete: {
+      method: "DELETE",
+      params: {
+        gist_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/gists/:gist_id"
+    },
+    deleteComment: {
+      method: "DELETE",
+      params: {
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        gist_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/gists/:gist_id/comments/:comment_id"
+    },
+    fork: {
+      method: "POST",
+      params: {
+        gist_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/gists/:gist_id/forks"
+    },
+    get: {
+      method: "GET",
+      params: {
+        gist_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/gists/:gist_id"
+    },
+    getComment: {
+      method: "GET",
+      params: {
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        gist_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/gists/:gist_id/comments/:comment_id"
+    },
+    getRevision: {
+      method: "GET",
+      params: {
+        gist_id: {
+          required: true,
+          type: "string"
+        },
+        sha: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/gists/:gist_id/:sha"
+    },
+    list: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        since: {
+          type: "string"
+        }
+      },
+      url: "/gists"
+    },
+    listComments: {
+      method: "GET",
+      params: {
+        gist_id: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/gists/:gist_id/comments"
+    },
+    listCommits: {
+      method: "GET",
+      params: {
+        gist_id: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/gists/:gist_id/commits"
+    },
+    listForks: {
+      method: "GET",
+      params: {
+        gist_id: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/gists/:gist_id/forks"
+    },
+    listPublic: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        since: {
+          type: "string"
+        }
+      },
+      url: "/gists/public"
+    },
+    listPublicForUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        since: {
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/gists"
+    },
+    listStarred: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        since: {
+          type: "string"
+        }
+      },
+      url: "/gists/starred"
+    },
+    star: {
+      method: "PUT",
+      params: {
+        gist_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/gists/:gist_id/star"
+    },
+    unstar: {
+      method: "DELETE",
+      params: {
+        gist_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/gists/:gist_id/star"
+    },
+    update: {
+      method: "PATCH",
+      params: {
+        description: {
+          type: "string"
+        },
+        files: {
+          type: "object"
+        },
+        "files.content": {
+          type: "string"
+        },
+        "files.filename": {
+          type: "string"
+        },
+        gist_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/gists/:gist_id"
+    },
+    updateComment: {
+      method: "PATCH",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        gist_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/gists/:gist_id/comments/:comment_id"
+    }
+  },
+  git: {
+    createBlob: {
+      method: "POST",
+      params: {
+        content: {
+          required: true,
+          type: "string"
+        },
+        encoding: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/git/blobs"
+    },
+    createCommit: {
+      method: "POST",
+      params: {
+        author: {
+          type: "object"
+        },
+        "author.date": {
+          type: "string"
+        },
+        "author.email": {
+          type: "string"
+        },
+        "author.name": {
+          type: "string"
+        },
+        committer: {
+          type: "object"
+        },
+        "committer.date": {
+          type: "string"
+        },
+        "committer.email": {
+          type: "string"
+        },
+        "committer.name": {
+          type: "string"
+        },
+        message: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        parents: {
+          required: true,
+          type: "string[]"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        signature: {
+          type: "string"
+        },
+        tree: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/git/commits"
+    },
+    createRef: {
+      method: "POST",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        ref: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        sha: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/git/refs"
+    },
+    createTag: {
+      method: "POST",
+      params: {
+        message: {
+          required: true,
+          type: "string"
+        },
+        object: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        tag: {
+          required: true,
+          type: "string"
+        },
+        tagger: {
+          type: "object"
+        },
+        "tagger.date": {
+          type: "string"
+        },
+        "tagger.email": {
+          type: "string"
+        },
+        "tagger.name": {
+          type: "string"
+        },
+        type: {
+          enum: ["commit", "tree", "blob"],
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/git/tags"
+    },
+    createTree: {
+      method: "POST",
+      params: {
+        base_tree: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        tree: {
+          required: true,
+          type: "object[]"
+        },
+        "tree[].content": {
+          type: "string"
+        },
+        "tree[].mode": {
+          enum: ["100644", "100755", "040000", "160000", "120000"],
+          type: "string"
+        },
+        "tree[].path": {
+          type: "string"
+        },
+        "tree[].sha": {
+          allowNull: true,
+          type: "string"
+        },
+        "tree[].type": {
+          enum: ["blob", "tree", "commit"],
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/git/trees"
+    },
+    deleteRef: {
+      method: "DELETE",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        ref: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/git/refs/:ref"
+    },
+    getBlob: {
+      method: "GET",
+      params: {
+        file_sha: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/git/blobs/:file_sha"
+    },
+    getCommit: {
+      method: "GET",
+      params: {
+        commit_sha: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/git/commits/:commit_sha"
+    },
+    getRef: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        ref: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/git/ref/:ref"
+    },
+    getTag: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        tag_sha: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/git/tags/:tag_sha"
+    },
+    getTree: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        recursive: {
+          enum: ["1"],
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        tree_sha: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/git/trees/:tree_sha"
+    },
+    listMatchingRefs: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        ref: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/git/matching-refs/:ref"
+    },
+    listRefs: {
+      method: "GET",
+      params: {
+        namespace: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/git/refs/:namespace"
+    },
+    updateRef: {
+      method: "PATCH",
+      params: {
+        force: {
+          type: "boolean"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        ref: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        sha: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/git/refs/:ref"
+    }
+  },
+  gitignore: {
+    getTemplate: {
+      method: "GET",
+      params: {
+        name: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/gitignore/templates/:name"
+    },
+    listTemplates: {
+      method: "GET",
+      params: {},
+      url: "/gitignore/templates"
+    }
+  },
+  interactions: {
+    addOrUpdateRestrictionsForOrg: {
+      headers: {
+        accept: "application/vnd.github.sombra-preview+json"
+      },
+      method: "PUT",
+      params: {
+        limit: {
+          enum: ["existing_users", "contributors_only", "collaborators_only"],
+          required: true,
+          type: "string"
+        },
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/interaction-limits"
+    },
+    addOrUpdateRestrictionsForRepo: {
+      headers: {
+        accept: "application/vnd.github.sombra-preview+json"
+      },
+      method: "PUT",
+      params: {
+        limit: {
+          enum: ["existing_users", "contributors_only", "collaborators_only"],
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/interaction-limits"
+    },
+    getRestrictionsForOrg: {
+      headers: {
+        accept: "application/vnd.github.sombra-preview+json"
+      },
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/interaction-limits"
+    },
+    getRestrictionsForRepo: {
+      headers: {
+        accept: "application/vnd.github.sombra-preview+json"
+      },
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/interaction-limits"
+    },
+    removeRestrictionsForOrg: {
+      headers: {
+        accept: "application/vnd.github.sombra-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/interaction-limits"
+    },
+    removeRestrictionsForRepo: {
+      headers: {
+        accept: "application/vnd.github.sombra-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/interaction-limits"
+    }
+  },
+  issues: {
+    addAssignees: {
+      method: "POST",
+      params: {
+        assignees: {
+          type: "string[]"
+        },
+        issue_number: {
+          required: true,
+          type: "integer"
+        },
+        number: {
+          alias: "issue_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/:issue_number/assignees"
+    },
+    addLabels: {
+      method: "POST",
+      params: {
+        issue_number: {
+          required: true,
+          type: "integer"
+        },
+        labels: {
+          required: true,
+          type: "string[]"
+        },
+        number: {
+          alias: "issue_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/:issue_number/labels"
+    },
+    checkAssignee: {
+      method: "GET",
+      params: {
+        assignee: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/assignees/:assignee"
+    },
+    create: {
+      method: "POST",
+      params: {
+        assignee: {
+          type: "string"
+        },
+        assignees: {
+          type: "string[]"
+        },
+        body: {
+          type: "string"
+        },
+        labels: {
+          type: "string[]"
+        },
+        milestone: {
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        title: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues"
+    },
+    createComment: {
+      method: "POST",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        issue_number: {
+          required: true,
+          type: "integer"
+        },
+        number: {
+          alias: "issue_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/:issue_number/comments"
+    },
+    createLabel: {
+      method: "POST",
+      params: {
+        color: {
+          required: true,
+          type: "string"
+        },
+        description: {
+          type: "string"
+        },
+        name: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/labels"
+    },
+    createMilestone: {
+      method: "POST",
+      params: {
+        description: {
+          type: "string"
+        },
+        due_on: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        state: {
+          enum: ["open", "closed"],
+          type: "string"
+        },
+        title: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/milestones"
+    },
+    deleteComment: {
+      method: "DELETE",
+      params: {
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/comments/:comment_id"
+    },
+    deleteLabel: {
+      method: "DELETE",
+      params: {
+        name: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/labels/:name"
+    },
+    deleteMilestone: {
+      method: "DELETE",
+      params: {
+        milestone_number: {
+          required: true,
+          type: "integer"
+        },
+        number: {
+          alias: "milestone_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/milestones/:milestone_number"
+    },
+    get: {
+      method: "GET",
+      params: {
+        issue_number: {
+          required: true,
+          type: "integer"
+        },
+        number: {
+          alias: "issue_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/:issue_number"
+    },
+    getComment: {
+      method: "GET",
+      params: {
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/comments/:comment_id"
+    },
+    getEvent: {
+      method: "GET",
+      params: {
+        event_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/events/:event_id"
+    },
+    getLabel: {
+      method: "GET",
+      params: {
+        name: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/labels/:name"
+    },
+    getMilestone: {
+      method: "GET",
+      params: {
+        milestone_number: {
+          required: true,
+          type: "integer"
+        },
+        number: {
+          alias: "milestone_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/milestones/:milestone_number"
+    },
+    list: {
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        filter: {
+          enum: ["assigned", "created", "mentioned", "subscribed", "all"],
+          type: "string"
+        },
+        labels: {
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        since: {
+          type: "string"
+        },
+        sort: {
+          enum: ["created", "updated", "comments"],
+          type: "string"
+        },
+        state: {
+          enum: ["open", "closed", "all"],
+          type: "string"
+        }
+      },
+      url: "/issues"
+    },
+    listAssignees: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/assignees"
+    },
+    listComments: {
+      method: "GET",
+      params: {
+        issue_number: {
+          required: true,
+          type: "integer"
+        },
+        number: {
+          alias: "issue_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        since: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/:issue_number/comments"
+    },
+    listCommentsForRepo: {
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        since: {
+          type: "string"
+        },
+        sort: {
+          enum: ["created", "updated"],
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/comments"
+    },
+    listEvents: {
+      method: "GET",
+      params: {
+        issue_number: {
+          required: true,
+          type: "integer"
+        },
+        number: {
+          alias: "issue_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/:issue_number/events"
+    },
+    listEventsForRepo: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/events"
+    },
+    listEventsForTimeline: {
+      headers: {
+        accept: "application/vnd.github.mockingbird-preview+json"
+      },
+      method: "GET",
+      params: {
+        issue_number: {
+          required: true,
+          type: "integer"
+        },
+        number: {
+          alias: "issue_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/:issue_number/timeline"
+    },
+    listForAuthenticatedUser: {
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        filter: {
+          enum: ["assigned", "created", "mentioned", "subscribed", "all"],
+          type: "string"
+        },
+        labels: {
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        since: {
+          type: "string"
+        },
+        sort: {
+          enum: ["created", "updated", "comments"],
+          type: "string"
+        },
+        state: {
+          enum: ["open", "closed", "all"],
+          type: "string"
+        }
+      },
+      url: "/user/issues"
+    },
+    listForOrg: {
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        filter: {
+          enum: ["assigned", "created", "mentioned", "subscribed", "all"],
+          type: "string"
+        },
+        labels: {
+          type: "string"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        since: {
+          type: "string"
+        },
+        sort: {
+          enum: ["created", "updated", "comments"],
+          type: "string"
+        },
+        state: {
+          enum: ["open", "closed", "all"],
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/issues"
+    },
+    listForRepo: {
+      method: "GET",
+      params: {
+        assignee: {
+          type: "string"
+        },
+        creator: {
+          type: "string"
+        },
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        labels: {
+          type: "string"
+        },
+        mentioned: {
+          type: "string"
+        },
+        milestone: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        since: {
+          type: "string"
+        },
+        sort: {
+          enum: ["created", "updated", "comments"],
+          type: "string"
+        },
+        state: {
+          enum: ["open", "closed", "all"],
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues"
+    },
+    listLabelsForMilestone: {
+      method: "GET",
+      params: {
+        milestone_number: {
+          required: true,
+          type: "integer"
+        },
+        number: {
+          alias: "milestone_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/milestones/:milestone_number/labels"
+    },
+    listLabelsForRepo: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/labels"
+    },
+    listLabelsOnIssue: {
+      method: "GET",
+      params: {
+        issue_number: {
+          required: true,
+          type: "integer"
+        },
+        number: {
+          alias: "issue_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/:issue_number/labels"
+    },
+    listMilestonesForRepo: {
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        sort: {
+          enum: ["due_on", "completeness"],
+          type: "string"
+        },
+        state: {
+          enum: ["open", "closed", "all"],
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/milestones"
+    },
+    lock: {
+      method: "PUT",
+      params: {
+        issue_number: {
+          required: true,
+          type: "integer"
+        },
+        lock_reason: {
+          enum: ["off-topic", "too heated", "resolved", "spam"],
+          type: "string"
+        },
+        number: {
+          alias: "issue_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/:issue_number/lock"
+    },
+    removeAssignees: {
+      method: "DELETE",
+      params: {
+        assignees: {
+          type: "string[]"
+        },
+        issue_number: {
+          required: true,
+          type: "integer"
+        },
+        number: {
+          alias: "issue_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/:issue_number/assignees"
+    },
+    removeLabel: {
+      method: "DELETE",
+      params: {
+        issue_number: {
+          required: true,
+          type: "integer"
+        },
+        name: {
+          required: true,
+          type: "string"
+        },
+        number: {
+          alias: "issue_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/:issue_number/labels/:name"
+    },
+    removeLabels: {
+      method: "DELETE",
+      params: {
+        issue_number: {
+          required: true,
+          type: "integer"
+        },
+        number: {
+          alias: "issue_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/:issue_number/labels"
+    },
+    replaceLabels: {
+      method: "PUT",
+      params: {
+        issue_number: {
+          required: true,
+          type: "integer"
+        },
+        labels: {
+          type: "string[]"
+        },
+        number: {
+          alias: "issue_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/:issue_number/labels"
+    },
+    unlock: {
+      method: "DELETE",
+      params: {
+        issue_number: {
+          required: true,
+          type: "integer"
+        },
+        number: {
+          alias: "issue_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/:issue_number/lock"
+    },
+    update: {
+      method: "PATCH",
+      params: {
+        assignee: {
+          type: "string"
+        },
+        assignees: {
+          type: "string[]"
+        },
+        body: {
+          type: "string"
+        },
+        issue_number: {
+          required: true,
+          type: "integer"
+        },
+        labels: {
+          type: "string[]"
+        },
+        milestone: {
+          allowNull: true,
+          type: "integer"
+        },
+        number: {
+          alias: "issue_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        state: {
+          enum: ["open", "closed"],
+          type: "string"
+        },
+        title: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/:issue_number"
+    },
+    updateComment: {
+      method: "PATCH",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/comments/:comment_id"
+    },
+    updateLabel: {
+      method: "PATCH",
+      params: {
+        color: {
+          type: "string"
+        },
+        current_name: {
+          required: true,
+          type: "string"
+        },
+        description: {
+          type: "string"
+        },
+        name: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/labels/:current_name"
+    },
+    updateMilestone: {
+      method: "PATCH",
+      params: {
+        description: {
+          type: "string"
+        },
+        due_on: {
+          type: "string"
+        },
+        milestone_number: {
+          required: true,
+          type: "integer"
+        },
+        number: {
+          alias: "milestone_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        state: {
+          enum: ["open", "closed"],
+          type: "string"
+        },
+        title: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/milestones/:milestone_number"
+    }
+  },
+  licenses: {
+    get: {
+      method: "GET",
+      params: {
+        license: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/licenses/:license"
+    },
+    getForRepo: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/license"
+    },
+    list: {
+      deprecated: "octokit.licenses.list() has been renamed to octokit.licenses.listCommonlyUsed() (2019-03-05)",
+      method: "GET",
+      params: {},
+      url: "/licenses"
+    },
+    listCommonlyUsed: {
+      method: "GET",
+      params: {},
+      url: "/licenses"
+    }
+  },
+  markdown: {
+    render: {
+      method: "POST",
+      params: {
+        context: {
+          type: "string"
+        },
+        mode: {
+          enum: ["markdown", "gfm"],
+          type: "string"
+        },
+        text: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/markdown"
+    },
+    renderRaw: {
+      headers: {
+        "content-type": "text/plain; charset=utf-8"
+      },
+      method: "POST",
+      params: {
+        data: {
+          mapTo: "data",
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/markdown/raw"
+    }
+  },
+  meta: {
+    get: {
+      method: "GET",
+      params: {},
+      url: "/meta"
+    }
+  },
+  migrations: {
+    cancelImport: {
+      method: "DELETE",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/import"
+    },
+    deleteArchiveForAuthenticatedUser: {
+      headers: {
+        accept: "application/vnd.github.wyandotte-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        migration_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/user/migrations/:migration_id/archive"
+    },
+    deleteArchiveForOrg: {
+      headers: {
+        accept: "application/vnd.github.wyandotte-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        migration_id: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/migrations/:migration_id/archive"
+    },
+    downloadArchiveForOrg: {
+      headers: {
+        accept: "application/vnd.github.wyandotte-preview+json"
+      },
+      method: "GET",
+      params: {
+        migration_id: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/migrations/:migration_id/archive"
+    },
+    getArchiveForAuthenticatedUser: {
+      headers: {
+        accept: "application/vnd.github.wyandotte-preview+json"
+      },
+      method: "GET",
+      params: {
+        migration_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/user/migrations/:migration_id/archive"
+    },
+    getArchiveForOrg: {
+      deprecated: "octokit.migrations.getArchiveForOrg() has been renamed to octokit.migrations.downloadArchiveForOrg() (2020-01-27)",
+      headers: {
+        accept: "application/vnd.github.wyandotte-preview+json"
+      },
+      method: "GET",
+      params: {
+        migration_id: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/migrations/:migration_id/archive"
+    },
+    getCommitAuthors: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        since: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/import/authors"
+    },
+    getImportProgress: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/import"
+    },
+    getLargeFiles: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/import/large_files"
+    },
+    getStatusForAuthenticatedUser: {
+      headers: {
+        accept: "application/vnd.github.wyandotte-preview+json"
+      },
+      method: "GET",
+      params: {
+        migration_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/user/migrations/:migration_id"
+    },
+    getStatusForOrg: {
+      headers: {
+        accept: "application/vnd.github.wyandotte-preview+json"
+      },
+      method: "GET",
+      params: {
+        migration_id: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/migrations/:migration_id"
+    },
+    listForAuthenticatedUser: {
+      headers: {
+        accept: "application/vnd.github.wyandotte-preview+json"
+      },
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/user/migrations"
+    },
+    listForOrg: {
+      headers: {
+        accept: "application/vnd.github.wyandotte-preview+json"
+      },
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/orgs/:org/migrations"
+    },
+    listReposForOrg: {
+      headers: {
+        accept: "application/vnd.github.wyandotte-preview+json"
+      },
+      method: "GET",
+      params: {
+        migration_id: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/orgs/:org/migrations/:migration_id/repositories"
+    },
+    listReposForUser: {
+      headers: {
+        accept: "application/vnd.github.wyandotte-preview+json"
+      },
+      method: "GET",
+      params: {
+        migration_id: {
+          required: true,
+          type: "integer"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/user/:migration_id/repositories"
+    },
+    mapCommitAuthor: {
+      method: "PATCH",
+      params: {
+        author_id: {
+          required: true,
+          type: "integer"
+        },
+        email: {
+          type: "string"
+        },
+        name: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/import/authors/:author_id"
+    },
+    setLfsPreference: {
+      method: "PATCH",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        use_lfs: {
+          enum: ["opt_in", "opt_out"],
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/import/lfs"
+    },
+    startForAuthenticatedUser: {
+      method: "POST",
+      params: {
+        exclude_attachments: {
+          type: "boolean"
+        },
+        lock_repositories: {
+          type: "boolean"
+        },
+        repositories: {
+          required: true,
+          type: "string[]"
+        }
+      },
+      url: "/user/migrations"
+    },
+    startForOrg: {
+      method: "POST",
+      params: {
+        exclude_attachments: {
+          type: "boolean"
+        },
+        lock_repositories: {
+          type: "boolean"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        repositories: {
+          required: true,
+          type: "string[]"
+        }
+      },
+      url: "/orgs/:org/migrations"
+    },
+    startImport: {
+      method: "PUT",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        tfvc_project: {
+          type: "string"
+        },
+        vcs: {
+          enum: ["subversion", "git", "mercurial", "tfvc"],
+          type: "string"
+        },
+        vcs_password: {
+          type: "string"
+        },
+        vcs_url: {
+          required: true,
+          type: "string"
+        },
+        vcs_username: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/import"
+    },
+    unlockRepoForAuthenticatedUser: {
+      headers: {
+        accept: "application/vnd.github.wyandotte-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        migration_id: {
+          required: true,
+          type: "integer"
+        },
+        repo_name: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/user/migrations/:migration_id/repos/:repo_name/lock"
+    },
+    unlockRepoForOrg: {
+      headers: {
+        accept: "application/vnd.github.wyandotte-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        migration_id: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        repo_name: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/migrations/:migration_id/repos/:repo_name/lock"
+    },
+    updateImport: {
+      method: "PATCH",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        vcs_password: {
+          type: "string"
+        },
+        vcs_username: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/import"
+    }
+  },
+  oauthAuthorizations: {
+    checkAuthorization: {
+      deprecated: "octokit.oauthAuthorizations.checkAuthorization() has been renamed to octokit.apps.checkAuthorization() (2019-11-05)",
+      method: "GET",
+      params: {
+        access_token: {
+          required: true,
+          type: "string"
+        },
+        client_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/applications/:client_id/tokens/:access_token"
+    },
+    createAuthorization: {
+      deprecated: "octokit.oauthAuthorizations.createAuthorization() is deprecated, see https://developer.github.com/v3/oauth_authorizations/#create-a-new-authorization",
+      method: "POST",
+      params: {
+        client_id: {
+          type: "string"
+        },
+        client_secret: {
+          type: "string"
+        },
+        fingerprint: {
+          type: "string"
+        },
+        note: {
+          required: true,
+          type: "string"
+        },
+        note_url: {
+          type: "string"
+        },
+        scopes: {
+          type: "string[]"
+        }
+      },
+      url: "/authorizations"
+    },
+    deleteAuthorization: {
+      deprecated: "octokit.oauthAuthorizations.deleteAuthorization() is deprecated, see https://developer.github.com/v3/oauth_authorizations/#delete-an-authorization",
+      method: "DELETE",
+      params: {
+        authorization_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/authorizations/:authorization_id"
+    },
+    deleteGrant: {
+      deprecated: "octokit.oauthAuthorizations.deleteGrant() is deprecated, see https://developer.github.com/v3/oauth_authorizations/#delete-a-grant",
+      method: "DELETE",
+      params: {
+        grant_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/applications/grants/:grant_id"
+    },
+    getAuthorization: {
+      deprecated: "octokit.oauthAuthorizations.getAuthorization() is deprecated, see https://developer.github.com/v3/oauth_authorizations/#get-a-single-authorization",
+      method: "GET",
+      params: {
+        authorization_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/authorizations/:authorization_id"
+    },
+    getGrant: {
+      deprecated: "octokit.oauthAuthorizations.getGrant() is deprecated, see https://developer.github.com/v3/oauth_authorizations/#get-a-single-grant",
+      method: "GET",
+      params: {
+        grant_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/applications/grants/:grant_id"
+    },
+    getOrCreateAuthorizationForApp: {
+      deprecated: "octokit.oauthAuthorizations.getOrCreateAuthorizationForApp() is deprecated, see https://developer.github.com/v3/oauth_authorizations/#get-or-create-an-authorization-for-a-specific-app",
+      method: "PUT",
+      params: {
+        client_id: {
+          required: true,
+          type: "string"
+        },
+        client_secret: {
+          required: true,
+          type: "string"
+        },
+        fingerprint: {
+          type: "string"
+        },
+        note: {
+          type: "string"
+        },
+        note_url: {
+          type: "string"
+        },
+        scopes: {
+          type: "string[]"
+        }
+      },
+      url: "/authorizations/clients/:client_id"
+    },
+    getOrCreateAuthorizationForAppAndFingerprint: {
+      deprecated: "octokit.oauthAuthorizations.getOrCreateAuthorizationForAppAndFingerprint() is deprecated, see https://developer.github.com/v3/oauth_authorizations/#get-or-create-an-authorization-for-a-specific-app-and-fingerprint",
+      method: "PUT",
+      params: {
+        client_id: {
+          required: true,
+          type: "string"
+        },
+        client_secret: {
+          required: true,
+          type: "string"
+        },
+        fingerprint: {
+          required: true,
+          type: "string"
+        },
+        note: {
+          type: "string"
+        },
+        note_url: {
+          type: "string"
+        },
+        scopes: {
+          type: "string[]"
+        }
+      },
+      url: "/authorizations/clients/:client_id/:fingerprint"
+    },
+    getOrCreateAuthorizationForAppFingerprint: {
+      deprecated: "octokit.oauthAuthorizations.getOrCreateAuthorizationForAppFingerprint() has been renamed to octokit.oauthAuthorizations.getOrCreateAuthorizationForAppAndFingerprint() (2018-12-27)",
+      method: "PUT",
+      params: {
+        client_id: {
+          required: true,
+          type: "string"
+        },
+        client_secret: {
+          required: true,
+          type: "string"
+        },
+        fingerprint: {
+          required: true,
+          type: "string"
+        },
+        note: {
+          type: "string"
+        },
+        note_url: {
+          type: "string"
+        },
+        scopes: {
+          type: "string[]"
+        }
+      },
+      url: "/authorizations/clients/:client_id/:fingerprint"
+    },
+    listAuthorizations: {
+      deprecated: "octokit.oauthAuthorizations.listAuthorizations() is deprecated, see https://developer.github.com/v3/oauth_authorizations/#list-your-authorizations",
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/authorizations"
+    },
+    listGrants: {
+      deprecated: "octokit.oauthAuthorizations.listGrants() is deprecated, see https://developer.github.com/v3/oauth_authorizations/#list-your-grants",
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/applications/grants"
+    },
+    resetAuthorization: {
+      deprecated: "octokit.oauthAuthorizations.resetAuthorization() has been renamed to octokit.apps.resetAuthorization() (2019-11-05)",
+      method: "POST",
+      params: {
+        access_token: {
+          required: true,
+          type: "string"
+        },
+        client_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/applications/:client_id/tokens/:access_token"
+    },
+    revokeAuthorizationForApplication: {
+      deprecated: "octokit.oauthAuthorizations.revokeAuthorizationForApplication() has been renamed to octokit.apps.revokeAuthorizationForApplication() (2019-11-05)",
+      method: "DELETE",
+      params: {
+        access_token: {
+          required: true,
+          type: "string"
+        },
+        client_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/applications/:client_id/tokens/:access_token"
+    },
+    revokeGrantForApplication: {
+      deprecated: "octokit.oauthAuthorizations.revokeGrantForApplication() has been renamed to octokit.apps.revokeGrantForApplication() (2019-11-05)",
+      method: "DELETE",
+      params: {
+        access_token: {
+          required: true,
+          type: "string"
+        },
+        client_id: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/applications/:client_id/grants/:access_token"
+    },
+    updateAuthorization: {
+      deprecated: "octokit.oauthAuthorizations.updateAuthorization() is deprecated, see https://developer.github.com/v3/oauth_authorizations/#update-an-existing-authorization",
+      method: "PATCH",
+      params: {
+        add_scopes: {
+          type: "string[]"
+        },
+        authorization_id: {
+          required: true,
+          type: "integer"
+        },
+        fingerprint: {
+          type: "string"
+        },
+        note: {
+          type: "string"
+        },
+        note_url: {
+          type: "string"
+        },
+        remove_scopes: {
+          type: "string[]"
+        },
+        scopes: {
+          type: "string[]"
+        }
+      },
+      url: "/authorizations/:authorization_id"
+    }
+  },
+  orgs: {
+    addOrUpdateMembership: {
+      method: "PUT",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        role: {
+          enum: ["admin", "member"],
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/memberships/:username"
+    },
+    blockUser: {
+      method: "PUT",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/blocks/:username"
+    },
+    checkBlockedUser: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/blocks/:username"
+    },
+    checkMembership: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/members/:username"
+    },
+    checkPublicMembership: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/public_members/:username"
+    },
+    concealMembership: {
+      method: "DELETE",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/public_members/:username"
+    },
+    convertMemberToOutsideCollaborator: {
+      method: "PUT",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/outside_collaborators/:username"
+    },
+    createHook: {
+      method: "POST",
+      params: {
+        active: {
+          type: "boolean"
+        },
+        config: {
+          required: true,
+          type: "object"
+        },
+        "config.content_type": {
+          type: "string"
+        },
+        "config.insecure_ssl": {
+          type: "string"
+        },
+        "config.secret": {
+          type: "string"
+        },
+        "config.url": {
+          required: true,
+          type: "string"
+        },
+        events: {
+          type: "string[]"
+        },
+        name: {
+          required: true,
+          type: "string"
+        },
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/hooks"
+    },
+    createInvitation: {
+      method: "POST",
+      params: {
+        email: {
+          type: "string"
+        },
+        invitee_id: {
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        role: {
+          enum: ["admin", "direct_member", "billing_manager"],
+          type: "string"
+        },
+        team_ids: {
+          type: "integer[]"
+        }
+      },
+      url: "/orgs/:org/invitations"
+    },
+    deleteHook: {
+      method: "DELETE",
+      params: {
+        hook_id: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/hooks/:hook_id"
+    },
+    get: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org"
+    },
+    getHook: {
+      method: "GET",
+      params: {
+        hook_id: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/hooks/:hook_id"
+    },
+    getMembership: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/memberships/:username"
+    },
+    getMembershipForAuthenticatedUser: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/user/memberships/orgs/:org"
+    },
+    list: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        since: {
+          type: "string"
+        }
+      },
+      url: "/organizations"
+    },
+    listBlockedUsers: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/blocks"
+    },
+    listForAuthenticatedUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/user/orgs"
+    },
+    listForUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/orgs"
+    },
+    listHooks: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/orgs/:org/hooks"
+    },
+    listInstallations: {
+      headers: {
+        accept: "application/vnd.github.machine-man-preview+json"
+      },
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/orgs/:org/installations"
+    },
+    listInvitationTeams: {
+      method: "GET",
+      params: {
+        invitation_id: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/orgs/:org/invitations/:invitation_id/teams"
+    },
+    listMembers: {
+      method: "GET",
+      params: {
+        filter: {
+          enum: ["2fa_disabled", "all"],
+          type: "string"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        role: {
+          enum: ["all", "admin", "member"],
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/members"
+    },
+    listMemberships: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        state: {
+          enum: ["active", "pending"],
+          type: "string"
+        }
+      },
+      url: "/user/memberships/orgs"
+    },
+    listOutsideCollaborators: {
+      method: "GET",
+      params: {
+        filter: {
+          enum: ["2fa_disabled", "all"],
+          type: "string"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/orgs/:org/outside_collaborators"
+    },
+    listPendingInvitations: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/orgs/:org/invitations"
+    },
+    listPublicMembers: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/orgs/:org/public_members"
+    },
+    pingHook: {
+      method: "POST",
+      params: {
+        hook_id: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/hooks/:hook_id/pings"
+    },
+    publicizeMembership: {
+      method: "PUT",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/public_members/:username"
+    },
+    removeMember: {
+      method: "DELETE",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/members/:username"
+    },
+    removeMembership: {
+      method: "DELETE",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/memberships/:username"
+    },
+    removeOutsideCollaborator: {
+      method: "DELETE",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/outside_collaborators/:username"
+    },
+    unblockUser: {
+      method: "DELETE",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/blocks/:username"
+    },
+    update: {
+      method: "PATCH",
+      params: {
+        billing_email: {
+          type: "string"
+        },
+        company: {
+          type: "string"
+        },
+        default_repository_permission: {
+          enum: ["read", "write", "admin", "none"],
+          type: "string"
+        },
+        description: {
+          type: "string"
+        },
+        email: {
+          type: "string"
+        },
+        has_organization_projects: {
+          type: "boolean"
+        },
+        has_repository_projects: {
+          type: "boolean"
+        },
+        location: {
+          type: "string"
+        },
+        members_allowed_repository_creation_type: {
+          enum: ["all", "private", "none"],
+          type: "string"
+        },
+        members_can_create_internal_repositories: {
+          type: "boolean"
+        },
+        members_can_create_private_repositories: {
+          type: "boolean"
+        },
+        members_can_create_public_repositories: {
+          type: "boolean"
+        },
+        members_can_create_repositories: {
+          type: "boolean"
+        },
+        name: {
+          type: "string"
+        },
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org"
+    },
+    updateHook: {
+      method: "PATCH",
+      params: {
+        active: {
+          type: "boolean"
+        },
+        config: {
+          type: "object"
+        },
+        "config.content_type": {
+          type: "string"
+        },
+        "config.insecure_ssl": {
+          type: "string"
+        },
+        "config.secret": {
+          type: "string"
+        },
+        "config.url": {
+          required: true,
+          type: "string"
+        },
+        events: {
+          type: "string[]"
+        },
+        hook_id: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/hooks/:hook_id"
+    },
+    updateMembership: {
+      method: "PATCH",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        state: {
+          enum: ["active"],
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/user/memberships/orgs/:org"
+    }
+  },
+  projects: {
+    addCollaborator: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "PUT",
+      params: {
+        permission: {
+          enum: ["read", "write", "admin"],
+          type: "string"
+        },
+        project_id: {
+          required: true,
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/projects/:project_id/collaborators/:username"
+    },
+    createCard: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "POST",
+      params: {
+        column_id: {
+          required: true,
+          type: "integer"
+        },
+        content_id: {
+          type: "integer"
+        },
+        content_type: {
+          type: "string"
+        },
+        note: {
+          type: "string"
+        }
+      },
+      url: "/projects/columns/:column_id/cards"
+    },
+    createColumn: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "POST",
+      params: {
+        name: {
+          required: true,
+          type: "string"
+        },
+        project_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/projects/:project_id/columns"
+    },
+    createForAuthenticatedUser: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "POST",
+      params: {
+        body: {
+          type: "string"
+        },
+        name: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/user/projects"
+    },
+    createForOrg: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "POST",
+      params: {
+        body: {
+          type: "string"
+        },
+        name: {
+          required: true,
+          type: "string"
+        },
+        org: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/projects"
+    },
+    createForRepo: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "POST",
+      params: {
+        body: {
+          type: "string"
+        },
+        name: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/projects"
+    },
+    delete: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        project_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/projects/:project_id"
+    },
+    deleteCard: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        card_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/projects/columns/cards/:card_id"
+    },
+    deleteColumn: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        column_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/projects/columns/:column_id"
+    },
+    get: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        project_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/projects/:project_id"
+    },
+    getCard: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "GET",
+      params: {
+        card_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/projects/columns/cards/:card_id"
+    },
+    getColumn: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "GET",
+      params: {
+        column_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/projects/columns/:column_id"
+    },
+    listCards: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "GET",
+      params: {
+        archived_state: {
+          enum: ["all", "archived", "not_archived"],
+          type: "string"
+        },
+        column_id: {
+          required: true,
+          type: "integer"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/projects/columns/:column_id/cards"
+    },
+    listCollaborators: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "GET",
+      params: {
+        affiliation: {
+          enum: ["outside", "direct", "all"],
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        project_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/projects/:project_id/collaborators"
+    },
+    listColumns: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        project_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/projects/:project_id/columns"
+    },
+    listForOrg: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        state: {
+          enum: ["open", "closed", "all"],
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/projects"
+    },
+    listForRepo: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        state: {
+          enum: ["open", "closed", "all"],
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/projects"
+    },
+    listForUser: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        state: {
+          enum: ["open", "closed", "all"],
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/projects"
+    },
+    moveCard: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "POST",
+      params: {
+        card_id: {
+          required: true,
+          type: "integer"
+        },
+        column_id: {
+          type: "integer"
+        },
+        position: {
+          required: true,
+          type: "string",
+          validation: "^(top|bottom|after:\\d+)$"
+        }
+      },
+      url: "/projects/columns/cards/:card_id/moves"
+    },
+    moveColumn: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "POST",
+      params: {
+        column_id: {
+          required: true,
+          type: "integer"
+        },
+        position: {
+          required: true,
+          type: "string",
+          validation: "^(first|last|after:\\d+)$"
+        }
+      },
+      url: "/projects/columns/:column_id/moves"
+    },
+    removeCollaborator: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        project_id: {
+          required: true,
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/projects/:project_id/collaborators/:username"
+    },
+    reviewUserPermissionLevel: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "GET",
+      params: {
+        project_id: {
+          required: true,
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/projects/:project_id/collaborators/:username/permission"
+    },
+    update: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "PATCH",
+      params: {
+        body: {
+          type: "string"
+        },
+        name: {
+          type: "string"
+        },
+        organization_permission: {
+          type: "string"
+        },
+        private: {
+          type: "boolean"
+        },
+        project_id: {
+          required: true,
+          type: "integer"
+        },
+        state: {
+          enum: ["open", "closed"],
+          type: "string"
+        }
+      },
+      url: "/projects/:project_id"
+    },
+    updateCard: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "PATCH",
+      params: {
+        archived: {
+          type: "boolean"
+        },
+        card_id: {
+          required: true,
+          type: "integer"
+        },
+        note: {
+          type: "string"
+        }
+      },
+      url: "/projects/columns/cards/:card_id"
+    },
+    updateColumn: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "PATCH",
+      params: {
+        column_id: {
+          required: true,
+          type: "integer"
+        },
+        name: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/projects/columns/:column_id"
+    }
+  },
+  pulls: {
+    checkIfMerged: {
+      method: "GET",
+      params: {
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/merge"
+    },
+    create: {
+      method: "POST",
+      params: {
+        base: {
+          required: true,
+          type: "string"
+        },
+        body: {
+          type: "string"
+        },
+        draft: {
+          type: "boolean"
+        },
+        head: {
+          required: true,
+          type: "string"
+        },
+        maintainer_can_modify: {
+          type: "boolean"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        title: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls"
+    },
+    createComment: {
+      method: "POST",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        commit_id: {
+          required: true,
+          type: "string"
+        },
+        in_reply_to: {
+          deprecated: true,
+          description: "The comment ID to reply to. **Note**: This must be the ID of a top-level comment, not a reply to that comment. Replies to replies are not supported.",
+          type: "integer"
+        },
+        line: {
+          type: "integer"
+        },
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        path: {
+          required: true,
+          type: "string"
+        },
+        position: {
+          type: "integer"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        side: {
+          enum: ["LEFT", "RIGHT"],
+          type: "string"
+        },
+        start_line: {
+          type: "integer"
+        },
+        start_side: {
+          enum: ["LEFT", "RIGHT", "side"],
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/comments"
+    },
+    createCommentReply: {
+      deprecated: "octokit.pulls.createCommentReply() has been renamed to octokit.pulls.createComment() (2019-09-09)",
+      method: "POST",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        commit_id: {
+          required: true,
+          type: "string"
+        },
+        in_reply_to: {
+          deprecated: true,
+          description: "The comment ID to reply to. **Note**: This must be the ID of a top-level comment, not a reply to that comment. Replies to replies are not supported.",
+          type: "integer"
+        },
+        line: {
+          type: "integer"
+        },
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        path: {
+          required: true,
+          type: "string"
+        },
+        position: {
+          type: "integer"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        side: {
+          enum: ["LEFT", "RIGHT"],
+          type: "string"
+        },
+        start_line: {
+          type: "integer"
+        },
+        start_side: {
+          enum: ["LEFT", "RIGHT", "side"],
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/comments"
+    },
+    createFromIssue: {
+      deprecated: "octokit.pulls.createFromIssue() is deprecated, see https://developer.github.com/v3/pulls/#create-a-pull-request",
+      method: "POST",
+      params: {
+        base: {
+          required: true,
+          type: "string"
+        },
+        draft: {
+          type: "boolean"
+        },
+        head: {
+          required: true,
+          type: "string"
+        },
+        issue: {
+          required: true,
+          type: "integer"
+        },
+        maintainer_can_modify: {
+          type: "boolean"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls"
+    },
+    createReview: {
+      method: "POST",
+      params: {
+        body: {
+          type: "string"
+        },
+        comments: {
+          type: "object[]"
+        },
+        "comments[].body": {
+          required: true,
+          type: "string"
+        },
+        "comments[].path": {
+          required: true,
+          type: "string"
+        },
+        "comments[].position": {
+          required: true,
+          type: "integer"
+        },
+        commit_id: {
+          type: "string"
+        },
+        event: {
+          enum: ["APPROVE", "REQUEST_CHANGES", "COMMENT"],
+          type: "string"
+        },
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/reviews"
+    },
+    createReviewCommentReply: {
+      method: "POST",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/comments/:comment_id/replies"
+    },
+    createReviewRequest: {
+      method: "POST",
+      params: {
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        reviewers: {
+          type: "string[]"
+        },
+        team_reviewers: {
+          type: "string[]"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/requested_reviewers"
+    },
+    deleteComment: {
+      method: "DELETE",
+      params: {
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/comments/:comment_id"
+    },
+    deletePendingReview: {
+      method: "DELETE",
+      params: {
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        review_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/reviews/:review_id"
+    },
+    deleteReviewRequest: {
+      method: "DELETE",
+      params: {
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        reviewers: {
+          type: "string[]"
+        },
+        team_reviewers: {
+          type: "string[]"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/requested_reviewers"
+    },
+    dismissReview: {
+      method: "PUT",
+      params: {
+        message: {
+          required: true,
+          type: "string"
+        },
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        review_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/reviews/:review_id/dismissals"
+    },
+    get: {
+      method: "GET",
+      params: {
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number"
+    },
+    getComment: {
+      method: "GET",
+      params: {
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/comments/:comment_id"
+    },
+    getCommentsForReview: {
+      method: "GET",
+      params: {
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        review_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/reviews/:review_id/comments"
+    },
+    getReview: {
+      method: "GET",
+      params: {
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        review_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/reviews/:review_id"
+    },
+    list: {
+      method: "GET",
+      params: {
+        base: {
+          type: "string"
+        },
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        head: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        sort: {
+          enum: ["created", "updated", "popularity", "long-running"],
+          type: "string"
+        },
+        state: {
+          enum: ["open", "closed", "all"],
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls"
+    },
+    listComments: {
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        since: {
+          type: "string"
+        },
+        sort: {
+          enum: ["created", "updated"],
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/comments"
+    },
+    listCommentsForRepo: {
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        since: {
+          type: "string"
+        },
+        sort: {
+          enum: ["created", "updated"],
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/comments"
+    },
+    listCommits: {
+      method: "GET",
+      params: {
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/commits"
+    },
+    listFiles: {
+      method: "GET",
+      params: {
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/files"
+    },
+    listReviewRequests: {
+      method: "GET",
+      params: {
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/requested_reviewers"
+    },
+    listReviews: {
+      method: "GET",
+      params: {
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/reviews"
+    },
+    merge: {
+      method: "PUT",
+      params: {
+        commit_message: {
+          type: "string"
+        },
+        commit_title: {
+          type: "string"
+        },
+        merge_method: {
+          enum: ["merge", "squash", "rebase"],
+          type: "string"
+        },
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        sha: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/merge"
+    },
+    submitReview: {
+      method: "POST",
+      params: {
+        body: {
+          type: "string"
+        },
+        event: {
+          enum: ["APPROVE", "REQUEST_CHANGES", "COMMENT"],
+          required: true,
+          type: "string"
+        },
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        review_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/reviews/:review_id/events"
+    },
+    update: {
+      method: "PATCH",
+      params: {
+        base: {
+          type: "string"
+        },
+        body: {
+          type: "string"
+        },
+        maintainer_can_modify: {
+          type: "boolean"
+        },
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        state: {
+          enum: ["open", "closed"],
+          type: "string"
+        },
+        title: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number"
+    },
+    updateBranch: {
+      headers: {
+        accept: "application/vnd.github.lydian-preview+json"
+      },
+      method: "PUT",
+      params: {
+        expected_head_sha: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/update-branch"
+    },
+    updateComment: {
+      method: "PATCH",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/comments/:comment_id"
+    },
+    updateReview: {
+      method: "PUT",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        number: {
+          alias: "pull_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        pull_number: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        review_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/:pull_number/reviews/:review_id"
+    }
+  },
+  rateLimit: {
+    get: {
+      method: "GET",
+      params: {},
+      url: "/rate_limit"
+    }
+  },
+  reactions: {
+    createForCommitComment: {
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "POST",
+      params: {
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/comments/:comment_id/reactions"
+    },
+    createForIssue: {
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "POST",
+      params: {
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          required: true,
+          type: "string"
+        },
+        issue_number: {
+          required: true,
+          type: "integer"
+        },
+        number: {
+          alias: "issue_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/:issue_number/reactions"
+    },
+    createForIssueComment: {
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "POST",
+      params: {
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/comments/:comment_id/reactions"
+    },
+    createForPullRequestReviewComment: {
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "POST",
+      params: {
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/comments/:comment_id/reactions"
+    },
+    createForTeamDiscussion: {
+      deprecated: "octokit.reactions.createForTeamDiscussion() has been renamed to octokit.reactions.createForTeamDiscussionLegacy() (2020-01-16)",
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "POST",
+      params: {
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          required: true,
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/reactions"
+    },
+    createForTeamDiscussionComment: {
+      deprecated: "octokit.reactions.createForTeamDiscussionComment() has been renamed to octokit.reactions.createForTeamDiscussionCommentLegacy() (2020-01-16)",
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "POST",
+      params: {
+        comment_number: {
+          required: true,
+          type: "integer"
+        },
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          required: true,
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/comments/:comment_number/reactions"
+    },
+    createForTeamDiscussionCommentInOrg: {
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "POST",
+      params: {
+        comment_number: {
+          required: true,
+          type: "integer"
+        },
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          required: true,
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/discussions/:discussion_number/comments/:comment_number/reactions"
+    },
+    createForTeamDiscussionCommentLegacy: {
+      deprecated: "octokit.reactions.createForTeamDiscussionCommentLegacy() is deprecated, see https://developer.github.com/v3/reactions/#create-reaction-for-a-team-discussion-comment-legacy",
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "POST",
+      params: {
+        comment_number: {
+          required: true,
+          type: "integer"
+        },
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          required: true,
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/comments/:comment_number/reactions"
+    },
+    createForTeamDiscussionInOrg: {
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "POST",
+      params: {
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          required: true,
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/discussions/:discussion_number/reactions"
+    },
+    createForTeamDiscussionLegacy: {
+      deprecated: "octokit.reactions.createForTeamDiscussionLegacy() is deprecated, see https://developer.github.com/v3/reactions/#create-reaction-for-a-team-discussion-legacy",
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "POST",
+      params: {
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          required: true,
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/reactions"
+    },
+    delete: {
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        reaction_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/reactions/:reaction_id"
+    },
+    listForCommitComment: {
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "GET",
+      params: {
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/comments/:comment_id/reactions"
+    },
+    listForIssue: {
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "GET",
+      params: {
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          type: "string"
+        },
+        issue_number: {
+          required: true,
+          type: "integer"
+        },
+        number: {
+          alias: "issue_number",
+          deprecated: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/:issue_number/reactions"
+    },
+    listForIssueComment: {
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "GET",
+      params: {
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/issues/comments/:comment_id/reactions"
+    },
+    listForPullRequestReviewComment: {
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "GET",
+      params: {
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pulls/comments/:comment_id/reactions"
+    },
+    listForTeamDiscussion: {
+      deprecated: "octokit.reactions.listForTeamDiscussion() has been renamed to octokit.reactions.listForTeamDiscussionLegacy() (2020-01-16)",
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "GET",
+      params: {
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/reactions"
+    },
+    listForTeamDiscussionComment: {
+      deprecated: "octokit.reactions.listForTeamDiscussionComment() has been renamed to octokit.reactions.listForTeamDiscussionCommentLegacy() (2020-01-16)",
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "GET",
+      params: {
+        comment_number: {
+          required: true,
+          type: "integer"
+        },
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/comments/:comment_number/reactions"
+    },
+    listForTeamDiscussionCommentInOrg: {
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "GET",
+      params: {
+        comment_number: {
+          required: true,
+          type: "integer"
+        },
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/discussions/:discussion_number/comments/:comment_number/reactions"
+    },
+    listForTeamDiscussionCommentLegacy: {
+      deprecated: "octokit.reactions.listForTeamDiscussionCommentLegacy() is deprecated, see https://developer.github.com/v3/reactions/#list-reactions-for-a-team-discussion-comment-legacy",
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "GET",
+      params: {
+        comment_number: {
+          required: true,
+          type: "integer"
+        },
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/comments/:comment_number/reactions"
+    },
+    listForTeamDiscussionInOrg: {
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "GET",
+      params: {
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/discussions/:discussion_number/reactions"
+    },
+    listForTeamDiscussionLegacy: {
+      deprecated: "octokit.reactions.listForTeamDiscussionLegacy() is deprecated, see https://developer.github.com/v3/reactions/#list-reactions-for-a-team-discussion-legacy",
+      headers: {
+        accept: "application/vnd.github.squirrel-girl-preview+json"
+      },
+      method: "GET",
+      params: {
+        content: {
+          enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/reactions"
+    }
+  },
+  repos: {
+    acceptInvitation: {
+      method: "PATCH",
+      params: {
+        invitation_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/user/repository_invitations/:invitation_id"
+    },
+    addCollaborator: {
+      method: "PUT",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        permission: {
+          enum: ["pull", "push", "admin"],
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/collaborators/:username"
+    },
+    addDeployKey: {
+      method: "POST",
+      params: {
+        key: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        read_only: {
+          type: "boolean"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        title: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/keys"
+    },
+    addProtectedBranchAdminEnforcement: {
+      method: "POST",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/enforce_admins"
+    },
+    addProtectedBranchAppRestrictions: {
+      method: "POST",
+      params: {
+        apps: {
+          mapTo: "data",
+          required: true,
+          type: "string[]"
+        },
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions/apps"
+    },
+    addProtectedBranchRequiredSignatures: {
+      headers: {
+        accept: "application/vnd.github.zzzax-preview+json"
+      },
+      method: "POST",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/required_signatures"
+    },
+    addProtectedBranchRequiredStatusChecksContexts: {
+      method: "POST",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        contexts: {
+          mapTo: "data",
+          required: true,
+          type: "string[]"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/required_status_checks/contexts"
+    },
+    addProtectedBranchTeamRestrictions: {
+      method: "POST",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        teams: {
+          mapTo: "data",
+          required: true,
+          type: "string[]"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions/teams"
+    },
+    addProtectedBranchUserRestrictions: {
+      method: "POST",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        users: {
+          mapTo: "data",
+          required: true,
+          type: "string[]"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions/users"
+    },
+    checkCollaborator: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/collaborators/:username"
+    },
+    checkVulnerabilityAlerts: {
+      headers: {
+        accept: "application/vnd.github.dorian-preview+json"
+      },
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/vulnerability-alerts"
+    },
+    compareCommits: {
+      method: "GET",
+      params: {
+        base: {
+          required: true,
+          type: "string"
+        },
+        head: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/compare/:base...:head"
+    },
+    createCommitComment: {
+      method: "POST",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        commit_sha: {
+          required: true,
+          type: "string"
+        },
+        line: {
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        path: {
+          type: "string"
+        },
+        position: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        sha: {
+          alias: "commit_sha",
+          deprecated: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/commits/:commit_sha/comments"
+    },
+    createDeployment: {
+      method: "POST",
+      params: {
+        auto_merge: {
+          type: "boolean"
+        },
+        description: {
+          type: "string"
+        },
+        environment: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        payload: {
+          type: "string"
+        },
+        production_environment: {
+          type: "boolean"
+        },
+        ref: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        required_contexts: {
+          type: "string[]"
+        },
+        task: {
+          type: "string"
+        },
+        transient_environment: {
+          type: "boolean"
+        }
+      },
+      url: "/repos/:owner/:repo/deployments"
+    },
+    createDeploymentStatus: {
+      method: "POST",
+      params: {
+        auto_inactive: {
+          type: "boolean"
+        },
+        deployment_id: {
+          required: true,
+          type: "integer"
+        },
+        description: {
+          type: "string"
+        },
+        environment: {
+          enum: ["production", "staging", "qa"],
+          type: "string"
+        },
+        environment_url: {
+          type: "string"
+        },
+        log_url: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        state: {
+          enum: ["error", "failure", "inactive", "in_progress", "queued", "pending", "success"],
+          required: true,
+          type: "string"
+        },
+        target_url: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/deployments/:deployment_id/statuses"
+    },
+    createDispatchEvent: {
+      method: "POST",
+      params: {
+        client_payload: {
+          type: "object"
+        },
+        event_type: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/dispatches"
+    },
+    createFile: {
+      deprecated: "octokit.repos.createFile() has been renamed to octokit.repos.createOrUpdateFile() (2019-06-07)",
+      method: "PUT",
+      params: {
+        author: {
+          type: "object"
+        },
+        "author.email": {
+          required: true,
+          type: "string"
+        },
+        "author.name": {
+          required: true,
+          type: "string"
+        },
+        branch: {
+          type: "string"
+        },
+        committer: {
+          type: "object"
+        },
+        "committer.email": {
+          required: true,
+          type: "string"
+        },
+        "committer.name": {
+          required: true,
+          type: "string"
+        },
+        content: {
+          required: true,
+          type: "string"
+        },
+        message: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        path: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        sha: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/contents/:path"
+    },
+    createForAuthenticatedUser: {
+      method: "POST",
+      params: {
+        allow_merge_commit: {
+          type: "boolean"
+        },
+        allow_rebase_merge: {
+          type: "boolean"
+        },
+        allow_squash_merge: {
+          type: "boolean"
+        },
+        auto_init: {
+          type: "boolean"
+        },
+        delete_branch_on_merge: {
+          type: "boolean"
+        },
+        description: {
+          type: "string"
+        },
+        gitignore_template: {
+          type: "string"
+        },
+        has_issues: {
+          type: "boolean"
+        },
+        has_projects: {
+          type: "boolean"
+        },
+        has_wiki: {
+          type: "boolean"
+        },
+        homepage: {
+          type: "string"
+        },
+        is_template: {
+          type: "boolean"
+        },
+        license_template: {
+          type: "string"
+        },
+        name: {
+          required: true,
+          type: "string"
+        },
+        private: {
+          type: "boolean"
+        },
+        team_id: {
+          type: "integer"
+        },
+        visibility: {
+          enum: ["public", "private", "visibility", "internal"],
+          type: "string"
+        }
+      },
+      url: "/user/repos"
+    },
+    createFork: {
+      method: "POST",
+      params: {
+        organization: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/forks"
+    },
+    createHook: {
+      method: "POST",
+      params: {
+        active: {
+          type: "boolean"
+        },
+        config: {
+          required: true,
+          type: "object"
+        },
+        "config.content_type": {
+          type: "string"
+        },
+        "config.insecure_ssl": {
+          type: "string"
+        },
+        "config.secret": {
+          type: "string"
+        },
+        "config.url": {
+          required: true,
+          type: "string"
+        },
+        events: {
+          type: "string[]"
+        },
+        name: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/hooks"
+    },
+    createInOrg: {
+      method: "POST",
+      params: {
+        allow_merge_commit: {
+          type: "boolean"
+        },
+        allow_rebase_merge: {
+          type: "boolean"
+        },
+        allow_squash_merge: {
+          type: "boolean"
+        },
+        auto_init: {
+          type: "boolean"
+        },
+        delete_branch_on_merge: {
+          type: "boolean"
+        },
+        description: {
+          type: "string"
+        },
+        gitignore_template: {
+          type: "string"
+        },
+        has_issues: {
+          type: "boolean"
+        },
+        has_projects: {
+          type: "boolean"
+        },
+        has_wiki: {
+          type: "boolean"
+        },
+        homepage: {
+          type: "string"
+        },
+        is_template: {
+          type: "boolean"
+        },
+        license_template: {
+          type: "string"
+        },
+        name: {
+          required: true,
+          type: "string"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        private: {
+          type: "boolean"
+        },
+        team_id: {
+          type: "integer"
+        },
+        visibility: {
+          enum: ["public", "private", "visibility", "internal"],
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/repos"
+    },
+    createOrUpdateFile: {
+      method: "PUT",
+      params: {
+        author: {
+          type: "object"
+        },
+        "author.email": {
+          required: true,
+          type: "string"
+        },
+        "author.name": {
+          required: true,
+          type: "string"
+        },
+        branch: {
+          type: "string"
+        },
+        committer: {
+          type: "object"
+        },
+        "committer.email": {
+          required: true,
+          type: "string"
+        },
+        "committer.name": {
+          required: true,
+          type: "string"
+        },
+        content: {
+          required: true,
+          type: "string"
+        },
+        message: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        path: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        sha: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/contents/:path"
+    },
+    createRelease: {
+      method: "POST",
+      params: {
+        body: {
+          type: "string"
+        },
+        draft: {
+          type: "boolean"
+        },
+        name: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        prerelease: {
+          type: "boolean"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        tag_name: {
+          required: true,
+          type: "string"
+        },
+        target_commitish: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/releases"
+    },
+    createStatus: {
+      method: "POST",
+      params: {
+        context: {
+          type: "string"
+        },
+        description: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        sha: {
+          required: true,
+          type: "string"
+        },
+        state: {
+          enum: ["error", "failure", "pending", "success"],
+          required: true,
+          type: "string"
+        },
+        target_url: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/statuses/:sha"
+    },
+    createUsingTemplate: {
+      headers: {
+        accept: "application/vnd.github.baptiste-preview+json"
+      },
+      method: "POST",
+      params: {
+        description: {
+          type: "string"
+        },
+        name: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          type: "string"
+        },
+        private: {
+          type: "boolean"
+        },
+        template_owner: {
+          required: true,
+          type: "string"
+        },
+        template_repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:template_owner/:template_repo/generate"
+    },
+    declineInvitation: {
+      method: "DELETE",
+      params: {
+        invitation_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/user/repository_invitations/:invitation_id"
+    },
+    delete: {
+      method: "DELETE",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo"
+    },
+    deleteCommitComment: {
+      method: "DELETE",
+      params: {
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/comments/:comment_id"
+    },
+    deleteDownload: {
+      method: "DELETE",
+      params: {
+        download_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/downloads/:download_id"
+    },
+    deleteFile: {
+      method: "DELETE",
+      params: {
+        author: {
+          type: "object"
+        },
+        "author.email": {
+          type: "string"
+        },
+        "author.name": {
+          type: "string"
+        },
+        branch: {
+          type: "string"
+        },
+        committer: {
+          type: "object"
+        },
+        "committer.email": {
+          type: "string"
+        },
+        "committer.name": {
+          type: "string"
+        },
+        message: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        path: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        sha: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/contents/:path"
+    },
+    deleteHook: {
+      method: "DELETE",
+      params: {
+        hook_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/hooks/:hook_id"
+    },
+    deleteInvitation: {
+      method: "DELETE",
+      params: {
+        invitation_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/invitations/:invitation_id"
+    },
+    deleteRelease: {
+      method: "DELETE",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        release_id: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/releases/:release_id"
+    },
+    deleteReleaseAsset: {
+      method: "DELETE",
+      params: {
+        asset_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/releases/assets/:asset_id"
+    },
+    disableAutomatedSecurityFixes: {
+      headers: {
+        accept: "application/vnd.github.london-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/automated-security-fixes"
+    },
+    disablePagesSite: {
+      headers: {
+        accept: "application/vnd.github.switcheroo-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pages"
+    },
+    disableVulnerabilityAlerts: {
+      headers: {
+        accept: "application/vnd.github.dorian-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/vulnerability-alerts"
+    },
+    enableAutomatedSecurityFixes: {
+      headers: {
+        accept: "application/vnd.github.london-preview+json"
+      },
+      method: "PUT",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/automated-security-fixes"
+    },
+    enablePagesSite: {
+      headers: {
+        accept: "application/vnd.github.switcheroo-preview+json"
+      },
+      method: "POST",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        source: {
+          type: "object"
+        },
+        "source.branch": {
+          enum: ["master", "gh-pages"],
+          type: "string"
+        },
+        "source.path": {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pages"
+    },
+    enableVulnerabilityAlerts: {
+      headers: {
+        accept: "application/vnd.github.dorian-preview+json"
+      },
+      method: "PUT",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/vulnerability-alerts"
+    },
+    get: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo"
+    },
+    getAppsWithAccessToProtectedBranch: {
+      method: "GET",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions/apps"
+    },
+    getArchiveLink: {
+      method: "GET",
+      params: {
+        archive_format: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        ref: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/:archive_format/:ref"
+    },
+    getBranch: {
+      method: "GET",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch"
+    },
+    getBranchProtection: {
+      method: "GET",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection"
+    },
+    getClones: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        per: {
+          enum: ["day", "week"],
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/traffic/clones"
+    },
+    getCodeFrequencyStats: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/stats/code_frequency"
+    },
+    getCollaboratorPermissionLevel: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/collaborators/:username/permission"
+    },
+    getCombinedStatusForRef: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        ref: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/commits/:ref/status"
+    },
+    getCommit: {
+      method: "GET",
+      params: {
+        commit_sha: {
+          alias: "ref",
+          deprecated: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        ref: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        sha: {
+          alias: "ref",
+          deprecated: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/commits/:ref"
+    },
+    getCommitActivityStats: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/stats/commit_activity"
+    },
+    getCommitComment: {
+      method: "GET",
+      params: {
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/comments/:comment_id"
+    },
+    getCommitRefSha: {
+      deprecated: "octokit.repos.getCommitRefSha() is deprecated, see https://developer.github.com/v3/repos/commits/#get-a-single-commit",
+      headers: {
+        accept: "application/vnd.github.v3.sha"
+      },
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        ref: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/commits/:ref"
+    },
+    getContents: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        path: {
+          required: true,
+          type: "string"
+        },
+        ref: {
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/contents/:path"
+    },
+    getContributorsStats: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/stats/contributors"
+    },
+    getDeployKey: {
+      method: "GET",
+      params: {
+        key_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/keys/:key_id"
+    },
+    getDeployment: {
+      method: "GET",
+      params: {
+        deployment_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/deployments/:deployment_id"
+    },
+    getDeploymentStatus: {
+      method: "GET",
+      params: {
+        deployment_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        status_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/deployments/:deployment_id/statuses/:status_id"
+    },
+    getDownload: {
+      method: "GET",
+      params: {
+        download_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/downloads/:download_id"
+    },
+    getHook: {
+      method: "GET",
+      params: {
+        hook_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/hooks/:hook_id"
+    },
+    getLatestPagesBuild: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pages/builds/latest"
+    },
+    getLatestRelease: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/releases/latest"
+    },
+    getPages: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pages"
+    },
+    getPagesBuild: {
+      method: "GET",
+      params: {
+        build_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pages/builds/:build_id"
+    },
+    getParticipationStats: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/stats/participation"
+    },
+    getProtectedBranchAdminEnforcement: {
+      method: "GET",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/enforce_admins"
+    },
+    getProtectedBranchPullRequestReviewEnforcement: {
+      method: "GET",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/required_pull_request_reviews"
+    },
+    getProtectedBranchRequiredSignatures: {
+      headers: {
+        accept: "application/vnd.github.zzzax-preview+json"
+      },
+      method: "GET",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/required_signatures"
+    },
+    getProtectedBranchRequiredStatusChecks: {
+      method: "GET",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/required_status_checks"
+    },
+    getProtectedBranchRestrictions: {
+      method: "GET",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions"
+    },
+    getPunchCardStats: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/stats/punch_card"
+    },
+    getReadme: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        ref: {
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/readme"
+    },
+    getRelease: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        release_id: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/releases/:release_id"
+    },
+    getReleaseAsset: {
+      method: "GET",
+      params: {
+        asset_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/releases/assets/:asset_id"
+    },
+    getReleaseByTag: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        tag: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/releases/tags/:tag"
+    },
+    getTeamsWithAccessToProtectedBranch: {
+      method: "GET",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions/teams"
+    },
+    getTopPaths: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/traffic/popular/paths"
+    },
+    getTopReferrers: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/traffic/popular/referrers"
+    },
+    getUsersWithAccessToProtectedBranch: {
+      method: "GET",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions/users"
+    },
+    getViews: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        per: {
+          enum: ["day", "week"],
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/traffic/views"
+    },
+    list: {
+      method: "GET",
+      params: {
+        affiliation: {
+          type: "string"
+        },
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        sort: {
+          enum: ["created", "updated", "pushed", "full_name"],
+          type: "string"
+        },
+        type: {
+          enum: ["all", "owner", "public", "private", "member"],
+          type: "string"
+        },
+        visibility: {
+          enum: ["all", "public", "private"],
+          type: "string"
+        }
+      },
+      url: "/user/repos"
+    },
+    listAppsWithAccessToProtectedBranch: {
+      deprecated: "octokit.repos.listAppsWithAccessToProtectedBranch() has been renamed to octokit.repos.getAppsWithAccessToProtectedBranch() (2019-09-13)",
+      method: "GET",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions/apps"
+    },
+    listAssetsForRelease: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        release_id: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/releases/:release_id/assets"
+    },
+    listBranches: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        protected: {
+          type: "boolean"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches"
+    },
+    listBranchesForHeadCommit: {
+      headers: {
+        accept: "application/vnd.github.groot-preview+json"
+      },
+      method: "GET",
+      params: {
+        commit_sha: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/commits/:commit_sha/branches-where-head"
+    },
+    listCollaborators: {
+      method: "GET",
+      params: {
+        affiliation: {
+          enum: ["outside", "direct", "all"],
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/collaborators"
+    },
+    listCommentsForCommit: {
+      method: "GET",
+      params: {
+        commit_sha: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        ref: {
+          alias: "commit_sha",
+          deprecated: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/commits/:commit_sha/comments"
+    },
+    listCommitComments: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/comments"
+    },
+    listCommits: {
+      method: "GET",
+      params: {
+        author: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        path: {
+          type: "string"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        sha: {
+          type: "string"
+        },
+        since: {
+          type: "string"
+        },
+        until: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/commits"
+    },
+    listContributors: {
+      method: "GET",
+      params: {
+        anon: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/contributors"
+    },
+    listDeployKeys: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/keys"
+    },
+    listDeploymentStatuses: {
+      method: "GET",
+      params: {
+        deployment_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/deployments/:deployment_id/statuses"
+    },
+    listDeployments: {
+      method: "GET",
+      params: {
+        environment: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        ref: {
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        sha: {
+          type: "string"
+        },
+        task: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/deployments"
+    },
+    listDownloads: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/downloads"
+    },
+    listForOrg: {
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        sort: {
+          enum: ["created", "updated", "pushed", "full_name"],
+          type: "string"
+        },
+        type: {
+          enum: ["all", "public", "private", "forks", "sources", "member", "internal"],
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/repos"
+    },
+    listForUser: {
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        sort: {
+          enum: ["created", "updated", "pushed", "full_name"],
+          type: "string"
+        },
+        type: {
+          enum: ["all", "owner", "member"],
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/repos"
+    },
+    listForks: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        sort: {
+          enum: ["newest", "oldest", "stargazers"],
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/forks"
+    },
+    listHooks: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/hooks"
+    },
+    listInvitations: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/invitations"
+    },
+    listInvitationsForAuthenticatedUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/user/repository_invitations"
+    },
+    listLanguages: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/languages"
+    },
+    listPagesBuilds: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pages/builds"
+    },
+    listProtectedBranchRequiredStatusChecksContexts: {
+      method: "GET",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/required_status_checks/contexts"
+    },
+    listProtectedBranchTeamRestrictions: {
+      deprecated: "octokit.repos.listProtectedBranchTeamRestrictions() has been renamed to octokit.repos.getTeamsWithAccessToProtectedBranch() (2019-09-09)",
+      method: "GET",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions/teams"
+    },
+    listProtectedBranchUserRestrictions: {
+      deprecated: "octokit.repos.listProtectedBranchUserRestrictions() has been renamed to octokit.repos.getUsersWithAccessToProtectedBranch() (2019-09-09)",
+      method: "GET",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions/users"
+    },
+    listPublic: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        since: {
+          type: "string"
+        }
+      },
+      url: "/repositories"
+    },
+    listPullRequestsAssociatedWithCommit: {
+      headers: {
+        accept: "application/vnd.github.groot-preview+json"
+      },
+      method: "GET",
+      params: {
+        commit_sha: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/commits/:commit_sha/pulls"
+    },
+    listReleases: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/releases"
+    },
+    listStatusesForRef: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        ref: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/commits/:ref/statuses"
+    },
+    listTags: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/tags"
+    },
+    listTeams: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/teams"
+    },
+    listTeamsWithAccessToProtectedBranch: {
+      deprecated: "octokit.repos.listTeamsWithAccessToProtectedBranch() has been renamed to octokit.repos.getTeamsWithAccessToProtectedBranch() (2019-09-13)",
+      method: "GET",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions/teams"
+    },
+    listTopics: {
+      headers: {
+        accept: "application/vnd.github.mercy-preview+json"
+      },
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/topics"
+    },
+    listUsersWithAccessToProtectedBranch: {
+      deprecated: "octokit.repos.listUsersWithAccessToProtectedBranch() has been renamed to octokit.repos.getUsersWithAccessToProtectedBranch() (2019-09-13)",
+      method: "GET",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions/users"
+    },
+    merge: {
+      method: "POST",
+      params: {
+        base: {
+          required: true,
+          type: "string"
+        },
+        commit_message: {
+          type: "string"
+        },
+        head: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/merges"
+    },
+    pingHook: {
+      method: "POST",
+      params: {
+        hook_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/hooks/:hook_id/pings"
+    },
+    removeBranchProtection: {
+      method: "DELETE",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection"
+    },
+    removeCollaborator: {
+      method: "DELETE",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/collaborators/:username"
+    },
+    removeDeployKey: {
+      method: "DELETE",
+      params: {
+        key_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/keys/:key_id"
+    },
+    removeProtectedBranchAdminEnforcement: {
+      method: "DELETE",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/enforce_admins"
+    },
+    removeProtectedBranchAppRestrictions: {
+      method: "DELETE",
+      params: {
+        apps: {
+          mapTo: "data",
+          required: true,
+          type: "string[]"
+        },
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions/apps"
+    },
+    removeProtectedBranchPullRequestReviewEnforcement: {
+      method: "DELETE",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/required_pull_request_reviews"
+    },
+    removeProtectedBranchRequiredSignatures: {
+      headers: {
+        accept: "application/vnd.github.zzzax-preview+json"
+      },
+      method: "DELETE",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/required_signatures"
+    },
+    removeProtectedBranchRequiredStatusChecks: {
+      method: "DELETE",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/required_status_checks"
+    },
+    removeProtectedBranchRequiredStatusChecksContexts: {
+      method: "DELETE",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        contexts: {
+          mapTo: "data",
+          required: true,
+          type: "string[]"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/required_status_checks/contexts"
+    },
+    removeProtectedBranchRestrictions: {
+      method: "DELETE",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions"
+    },
+    removeProtectedBranchTeamRestrictions: {
+      method: "DELETE",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        teams: {
+          mapTo: "data",
+          required: true,
+          type: "string[]"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions/teams"
+    },
+    removeProtectedBranchUserRestrictions: {
+      method: "DELETE",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        users: {
+          mapTo: "data",
+          required: true,
+          type: "string[]"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions/users"
+    },
+    replaceProtectedBranchAppRestrictions: {
+      method: "PUT",
+      params: {
+        apps: {
+          mapTo: "data",
+          required: true,
+          type: "string[]"
+        },
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions/apps"
+    },
+    replaceProtectedBranchRequiredStatusChecksContexts: {
+      method: "PUT",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        contexts: {
+          mapTo: "data",
+          required: true,
+          type: "string[]"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/required_status_checks/contexts"
+    },
+    replaceProtectedBranchTeamRestrictions: {
+      method: "PUT",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        teams: {
+          mapTo: "data",
+          required: true,
+          type: "string[]"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions/teams"
+    },
+    replaceProtectedBranchUserRestrictions: {
+      method: "PUT",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        users: {
+          mapTo: "data",
+          required: true,
+          type: "string[]"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/restrictions/users"
+    },
+    replaceTopics: {
+      headers: {
+        accept: "application/vnd.github.mercy-preview+json"
+      },
+      method: "PUT",
+      params: {
+        names: {
+          required: true,
+          type: "string[]"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/topics"
+    },
+    requestPageBuild: {
+      method: "POST",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pages/builds"
+    },
+    retrieveCommunityProfileMetrics: {
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/community/profile"
+    },
+    testPushHook: {
+      method: "POST",
+      params: {
+        hook_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/hooks/:hook_id/tests"
+    },
+    transfer: {
+      method: "POST",
+      params: {
+        new_owner: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        team_ids: {
+          type: "integer[]"
+        }
+      },
+      url: "/repos/:owner/:repo/transfer"
+    },
+    update: {
+      method: "PATCH",
+      params: {
+        allow_merge_commit: {
+          type: "boolean"
+        },
+        allow_rebase_merge: {
+          type: "boolean"
+        },
+        allow_squash_merge: {
+          type: "boolean"
+        },
+        archived: {
+          type: "boolean"
+        },
+        default_branch: {
+          type: "string"
+        },
+        delete_branch_on_merge: {
+          type: "boolean"
+        },
+        description: {
+          type: "string"
+        },
+        has_issues: {
+          type: "boolean"
+        },
+        has_projects: {
+          type: "boolean"
+        },
+        has_wiki: {
+          type: "boolean"
+        },
+        homepage: {
+          type: "string"
+        },
+        is_template: {
+          type: "boolean"
+        },
+        name: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        private: {
+          type: "boolean"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        visibility: {
+          enum: ["public", "private", "visibility", "internal"],
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo"
+    },
+    updateBranchProtection: {
+      method: "PUT",
+      params: {
+        allow_deletions: {
+          type: "boolean"
+        },
+        allow_force_pushes: {
+          allowNull: true,
+          type: "boolean"
+        },
+        branch: {
+          required: true,
+          type: "string"
+        },
+        enforce_admins: {
+          allowNull: true,
+          required: true,
+          type: "boolean"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        required_linear_history: {
+          type: "boolean"
+        },
+        required_pull_request_reviews: {
+          allowNull: true,
+          required: true,
+          type: "object"
+        },
+        "required_pull_request_reviews.dismiss_stale_reviews": {
+          type: "boolean"
+        },
+        "required_pull_request_reviews.dismissal_restrictions": {
+          type: "object"
+        },
+        "required_pull_request_reviews.dismissal_restrictions.teams": {
+          type: "string[]"
+        },
+        "required_pull_request_reviews.dismissal_restrictions.users": {
+          type: "string[]"
+        },
+        "required_pull_request_reviews.require_code_owner_reviews": {
+          type: "boolean"
+        },
+        "required_pull_request_reviews.required_approving_review_count": {
+          type: "integer"
+        },
+        required_status_checks: {
+          allowNull: true,
+          required: true,
+          type: "object"
+        },
+        "required_status_checks.contexts": {
+          required: true,
+          type: "string[]"
+        },
+        "required_status_checks.strict": {
+          required: true,
+          type: "boolean"
+        },
+        restrictions: {
+          allowNull: true,
+          required: true,
+          type: "object"
+        },
+        "restrictions.apps": {
+          type: "string[]"
+        },
+        "restrictions.teams": {
+          required: true,
+          type: "string[]"
+        },
+        "restrictions.users": {
+          required: true,
+          type: "string[]"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection"
+    },
+    updateCommitComment: {
+      method: "PATCH",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        comment_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/comments/:comment_id"
+    },
+    updateFile: {
+      deprecated: "octokit.repos.updateFile() has been renamed to octokit.repos.createOrUpdateFile() (2019-06-07)",
+      method: "PUT",
+      params: {
+        author: {
+          type: "object"
+        },
+        "author.email": {
+          required: true,
+          type: "string"
+        },
+        "author.name": {
+          required: true,
+          type: "string"
+        },
+        branch: {
+          type: "string"
+        },
+        committer: {
+          type: "object"
+        },
+        "committer.email": {
+          required: true,
+          type: "string"
+        },
+        "committer.name": {
+          required: true,
+          type: "string"
+        },
+        content: {
+          required: true,
+          type: "string"
+        },
+        message: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        path: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        sha: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/contents/:path"
+    },
+    updateHook: {
+      method: "PATCH",
+      params: {
+        active: {
+          type: "boolean"
+        },
+        add_events: {
+          type: "string[]"
+        },
+        config: {
+          type: "object"
+        },
+        "config.content_type": {
+          type: "string"
+        },
+        "config.insecure_ssl": {
+          type: "string"
+        },
+        "config.secret": {
+          type: "string"
+        },
+        "config.url": {
+          required: true,
+          type: "string"
+        },
+        events: {
+          type: "string[]"
+        },
+        hook_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        remove_events: {
+          type: "string[]"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/hooks/:hook_id"
+    },
+    updateInformationAboutPagesSite: {
+      method: "PUT",
+      params: {
+        cname: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        source: {
+          enum: ['"gh-pages"', '"master"', '"master /docs"'],
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/pages"
+    },
+    updateInvitation: {
+      method: "PATCH",
+      params: {
+        invitation_id: {
+          required: true,
+          type: "integer"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        permissions: {
+          enum: ["read", "write", "admin"],
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/invitations/:invitation_id"
+    },
+    updateProtectedBranchPullRequestReviewEnforcement: {
+      method: "PATCH",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        dismiss_stale_reviews: {
+          type: "boolean"
+        },
+        dismissal_restrictions: {
+          type: "object"
+        },
+        "dismissal_restrictions.teams": {
+          type: "string[]"
+        },
+        "dismissal_restrictions.users": {
+          type: "string[]"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        require_code_owner_reviews: {
+          type: "boolean"
+        },
+        required_approving_review_count: {
+          type: "integer"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/required_pull_request_reviews"
+    },
+    updateProtectedBranchRequiredStatusChecks: {
+      method: "PATCH",
+      params: {
+        branch: {
+          required: true,
+          type: "string"
+        },
+        contexts: {
+          type: "string[]"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        strict: {
+          type: "boolean"
+        }
+      },
+      url: "/repos/:owner/:repo/branches/:branch/protection/required_status_checks"
+    },
+    updateRelease: {
+      method: "PATCH",
+      params: {
+        body: {
+          type: "string"
+        },
+        draft: {
+          type: "boolean"
+        },
+        name: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        prerelease: {
+          type: "boolean"
+        },
+        release_id: {
+          required: true,
+          type: "integer"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        tag_name: {
+          type: "string"
+        },
+        target_commitish: {
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/releases/:release_id"
+    },
+    updateReleaseAsset: {
+      method: "PATCH",
+      params: {
+        asset_id: {
+          required: true,
+          type: "integer"
+        },
+        label: {
+          type: "string"
+        },
+        name: {
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/repos/:owner/:repo/releases/assets/:asset_id"
+    },
+    uploadReleaseAsset: {
+      method: "POST",
+      params: {
+        file: {
+          mapTo: "data",
+          required: true,
+          type: "string | object"
+        },
+        headers: {
+          required: true,
+          type: "object"
+        },
+        "headers.content-length": {
+          required: true,
+          type: "integer"
+        },
+        "headers.content-type": {
+          required: true,
+          type: "string"
+        },
+        label: {
+          type: "string"
+        },
+        name: {
+          required: true,
+          type: "string"
+        },
+        url: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: ":url"
+    }
+  },
+  search: {
+    code: {
+      method: "GET",
+      params: {
+        order: {
+          enum: ["desc", "asc"],
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        q: {
+          required: true,
+          type: "string"
+        },
+        sort: {
+          enum: ["indexed"],
+          type: "string"
+        }
+      },
+      url: "/search/code"
+    },
+    commits: {
+      headers: {
+        accept: "application/vnd.github.cloak-preview+json"
+      },
+      method: "GET",
+      params: {
+        order: {
+          enum: ["desc", "asc"],
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        q: {
+          required: true,
+          type: "string"
+        },
+        sort: {
+          enum: ["author-date", "committer-date"],
+          type: "string"
+        }
+      },
+      url: "/search/commits"
+    },
+    issues: {
+      deprecated: "octokit.search.issues() has been renamed to octokit.search.issuesAndPullRequests() (2018-12-27)",
+      method: "GET",
+      params: {
+        order: {
+          enum: ["desc", "asc"],
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        q: {
+          required: true,
+          type: "string"
+        },
+        sort: {
+          enum: ["comments", "reactions", "reactions-+1", "reactions--1", "reactions-smile", "reactions-thinking_face", "reactions-heart", "reactions-tada", "interactions", "created", "updated"],
+          type: "string"
+        }
+      },
+      url: "/search/issues"
+    },
+    issuesAndPullRequests: {
+      method: "GET",
+      params: {
+        order: {
+          enum: ["desc", "asc"],
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        q: {
+          required: true,
+          type: "string"
+        },
+        sort: {
+          enum: ["comments", "reactions", "reactions-+1", "reactions--1", "reactions-smile", "reactions-thinking_face", "reactions-heart", "reactions-tada", "interactions", "created", "updated"],
+          type: "string"
+        }
+      },
+      url: "/search/issues"
+    },
+    labels: {
+      method: "GET",
+      params: {
+        order: {
+          enum: ["desc", "asc"],
+          type: "string"
+        },
+        q: {
+          required: true,
+          type: "string"
+        },
+        repository_id: {
+          required: true,
+          type: "integer"
+        },
+        sort: {
+          enum: ["created", "updated"],
+          type: "string"
+        }
+      },
+      url: "/search/labels"
+    },
+    repos: {
+      method: "GET",
+      params: {
+        order: {
+          enum: ["desc", "asc"],
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        q: {
+          required: true,
+          type: "string"
+        },
+        sort: {
+          enum: ["stars", "forks", "help-wanted-issues", "updated"],
+          type: "string"
+        }
+      },
+      url: "/search/repositories"
+    },
+    topics: {
+      method: "GET",
+      params: {
+        q: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/search/topics"
+    },
+    users: {
+      method: "GET",
+      params: {
+        order: {
+          enum: ["desc", "asc"],
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        q: {
+          required: true,
+          type: "string"
+        },
+        sort: {
+          enum: ["followers", "repositories", "joined"],
+          type: "string"
+        }
+      },
+      url: "/search/users"
+    }
+  },
+  teams: {
+    addMember: {
+      deprecated: "octokit.teams.addMember() has been renamed to octokit.teams.addMemberLegacy() (2020-01-16)",
+      method: "PUT",
+      params: {
+        team_id: {
+          required: true,
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/teams/:team_id/members/:username"
+    },
+    addMemberLegacy: {
+      deprecated: "octokit.teams.addMemberLegacy() is deprecated, see https://developer.github.com/v3/teams/members/#add-team-member-legacy",
+      method: "PUT",
+      params: {
+        team_id: {
+          required: true,
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/teams/:team_id/members/:username"
+    },
+    addOrUpdateMembership: {
+      deprecated: "octokit.teams.addOrUpdateMembership() has been renamed to octokit.teams.addOrUpdateMembershipLegacy() (2020-01-16)",
+      method: "PUT",
+      params: {
+        role: {
+          enum: ["member", "maintainer"],
+          type: "string"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/teams/:team_id/memberships/:username"
+    },
+    addOrUpdateMembershipInOrg: {
+      method: "PUT",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        role: {
+          enum: ["member", "maintainer"],
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/memberships/:username"
+    },
+    addOrUpdateMembershipLegacy: {
+      deprecated: "octokit.teams.addOrUpdateMembershipLegacy() is deprecated, see https://developer.github.com/v3/teams/members/#add-or-update-team-membership-legacy",
+      method: "PUT",
+      params: {
+        role: {
+          enum: ["member", "maintainer"],
+          type: "string"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/teams/:team_id/memberships/:username"
+    },
+    addOrUpdateProject: {
+      deprecated: "octokit.teams.addOrUpdateProject() has been renamed to octokit.teams.addOrUpdateProjectLegacy() (2020-01-16)",
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "PUT",
+      params: {
+        permission: {
+          enum: ["read", "write", "admin"],
+          type: "string"
+        },
+        project_id: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/projects/:project_id"
+    },
+    addOrUpdateProjectInOrg: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "PUT",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        permission: {
+          enum: ["read", "write", "admin"],
+          type: "string"
+        },
+        project_id: {
+          required: true,
+          type: "integer"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/projects/:project_id"
+    },
+    addOrUpdateProjectLegacy: {
+      deprecated: "octokit.teams.addOrUpdateProjectLegacy() is deprecated, see https://developer.github.com/v3/teams/#add-or-update-team-project-legacy",
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "PUT",
+      params: {
+        permission: {
+          enum: ["read", "write", "admin"],
+          type: "string"
+        },
+        project_id: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/projects/:project_id"
+    },
+    addOrUpdateRepo: {
+      deprecated: "octokit.teams.addOrUpdateRepo() has been renamed to octokit.teams.addOrUpdateRepoLegacy() (2020-01-16)",
+      method: "PUT",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        permission: {
+          enum: ["pull", "push", "admin"],
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/repos/:owner/:repo"
+    },
+    addOrUpdateRepoInOrg: {
+      method: "PUT",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        permission: {
+          enum: ["pull", "push", "admin"],
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/repos/:owner/:repo"
+    },
+    addOrUpdateRepoLegacy: {
+      deprecated: "octokit.teams.addOrUpdateRepoLegacy() is deprecated, see https://developer.github.com/v3/teams/#add-or-update-team-repository-legacy",
+      method: "PUT",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        permission: {
+          enum: ["pull", "push", "admin"],
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/repos/:owner/:repo"
+    },
+    checkManagesRepo: {
+      deprecated: "octokit.teams.checkManagesRepo() has been renamed to octokit.teams.checkManagesRepoLegacy() (2020-01-16)",
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/repos/:owner/:repo"
+    },
+    checkManagesRepoInOrg: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/repos/:owner/:repo"
+    },
+    checkManagesRepoLegacy: {
+      deprecated: "octokit.teams.checkManagesRepoLegacy() is deprecated, see https://developer.github.com/v3/teams/#check-if-a-team-manages-a-repository-legacy",
+      method: "GET",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/repos/:owner/:repo"
+    },
+    create: {
+      method: "POST",
+      params: {
+        description: {
+          type: "string"
+        },
+        maintainers: {
+          type: "string[]"
+        },
+        name: {
+          required: true,
+          type: "string"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        parent_team_id: {
+          type: "integer"
+        },
+        permission: {
+          enum: ["pull", "push", "admin"],
+          type: "string"
+        },
+        privacy: {
+          enum: ["secret", "closed"],
+          type: "string"
+        },
+        repo_names: {
+          type: "string[]"
+        }
+      },
+      url: "/orgs/:org/teams"
+    },
+    createDiscussion: {
+      deprecated: "octokit.teams.createDiscussion() has been renamed to octokit.teams.createDiscussionLegacy() (2020-01-16)",
+      method: "POST",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        private: {
+          type: "boolean"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        },
+        title: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/teams/:team_id/discussions"
+    },
+    createDiscussionComment: {
+      deprecated: "octokit.teams.createDiscussionComment() has been renamed to octokit.teams.createDiscussionCommentLegacy() (2020-01-16)",
+      method: "POST",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/comments"
+    },
+    createDiscussionCommentInOrg: {
+      method: "POST",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/discussions/:discussion_number/comments"
+    },
+    createDiscussionCommentLegacy: {
+      deprecated: "octokit.teams.createDiscussionCommentLegacy() is deprecated, see https://developer.github.com/v3/teams/discussion_comments/#create-a-comment-legacy",
+      method: "POST",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/comments"
+    },
+    createDiscussionInOrg: {
+      method: "POST",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        private: {
+          type: "boolean"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        },
+        title: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/discussions"
+    },
+    createDiscussionLegacy: {
+      deprecated: "octokit.teams.createDiscussionLegacy() is deprecated, see https://developer.github.com/v3/teams/discussions/#create-a-discussion-legacy",
+      method: "POST",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        private: {
+          type: "boolean"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        },
+        title: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/teams/:team_id/discussions"
+    },
+    delete: {
+      deprecated: "octokit.teams.delete() has been renamed to octokit.teams.deleteLegacy() (2020-01-16)",
+      method: "DELETE",
+      params: {
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id"
+    },
+    deleteDiscussion: {
+      deprecated: "octokit.teams.deleteDiscussion() has been renamed to octokit.teams.deleteDiscussionLegacy() (2020-01-16)",
+      method: "DELETE",
+      params: {
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number"
+    },
+    deleteDiscussionComment: {
+      deprecated: "octokit.teams.deleteDiscussionComment() has been renamed to octokit.teams.deleteDiscussionCommentLegacy() (2020-01-16)",
+      method: "DELETE",
+      params: {
+        comment_number: {
+          required: true,
+          type: "integer"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/comments/:comment_number"
+    },
+    deleteDiscussionCommentInOrg: {
+      method: "DELETE",
+      params: {
+        comment_number: {
+          required: true,
+          type: "integer"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/discussions/:discussion_number/comments/:comment_number"
+    },
+    deleteDiscussionCommentLegacy: {
+      deprecated: "octokit.teams.deleteDiscussionCommentLegacy() is deprecated, see https://developer.github.com/v3/teams/discussion_comments/#delete-a-comment-legacy",
+      method: "DELETE",
+      params: {
+        comment_number: {
+          required: true,
+          type: "integer"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/comments/:comment_number"
+    },
+    deleteDiscussionInOrg: {
+      method: "DELETE",
+      params: {
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/discussions/:discussion_number"
+    },
+    deleteDiscussionLegacy: {
+      deprecated: "octokit.teams.deleteDiscussionLegacy() is deprecated, see https://developer.github.com/v3/teams/discussions/#delete-a-discussion-legacy",
+      method: "DELETE",
+      params: {
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number"
+    },
+    deleteInOrg: {
+      method: "DELETE",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug"
+    },
+    deleteLegacy: {
+      deprecated: "octokit.teams.deleteLegacy() is deprecated, see https://developer.github.com/v3/teams/#delete-team-legacy",
+      method: "DELETE",
+      params: {
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id"
+    },
+    get: {
+      deprecated: "octokit.teams.get() has been renamed to octokit.teams.getLegacy() (2020-01-16)",
+      method: "GET",
+      params: {
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id"
+    },
+    getByName: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug"
+    },
+    getDiscussion: {
+      deprecated: "octokit.teams.getDiscussion() has been renamed to octokit.teams.getDiscussionLegacy() (2020-01-16)",
+      method: "GET",
+      params: {
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number"
+    },
+    getDiscussionComment: {
+      deprecated: "octokit.teams.getDiscussionComment() has been renamed to octokit.teams.getDiscussionCommentLegacy() (2020-01-16)",
+      method: "GET",
+      params: {
+        comment_number: {
+          required: true,
+          type: "integer"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/comments/:comment_number"
+    },
+    getDiscussionCommentInOrg: {
+      method: "GET",
+      params: {
+        comment_number: {
+          required: true,
+          type: "integer"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/discussions/:discussion_number/comments/:comment_number"
+    },
+    getDiscussionCommentLegacy: {
+      deprecated: "octokit.teams.getDiscussionCommentLegacy() is deprecated, see https://developer.github.com/v3/teams/discussion_comments/#get-a-single-comment-legacy",
+      method: "GET",
+      params: {
+        comment_number: {
+          required: true,
+          type: "integer"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/comments/:comment_number"
+    },
+    getDiscussionInOrg: {
+      method: "GET",
+      params: {
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/discussions/:discussion_number"
+    },
+    getDiscussionLegacy: {
+      deprecated: "octokit.teams.getDiscussionLegacy() is deprecated, see https://developer.github.com/v3/teams/discussions/#get-a-single-discussion-legacy",
+      method: "GET",
+      params: {
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number"
+    },
+    getLegacy: {
+      deprecated: "octokit.teams.getLegacy() is deprecated, see https://developer.github.com/v3/teams/#get-team-legacy",
+      method: "GET",
+      params: {
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id"
+    },
+    getMember: {
+      deprecated: "octokit.teams.getMember() has been renamed to octokit.teams.getMemberLegacy() (2020-01-16)",
+      method: "GET",
+      params: {
+        team_id: {
+          required: true,
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/teams/:team_id/members/:username"
+    },
+    getMemberLegacy: {
+      deprecated: "octokit.teams.getMemberLegacy() is deprecated, see https://developer.github.com/v3/teams/members/#get-team-member-legacy",
+      method: "GET",
+      params: {
+        team_id: {
+          required: true,
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/teams/:team_id/members/:username"
+    },
+    getMembership: {
+      deprecated: "octokit.teams.getMembership() has been renamed to octokit.teams.getMembershipLegacy() (2020-01-16)",
+      method: "GET",
+      params: {
+        team_id: {
+          required: true,
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/teams/:team_id/memberships/:username"
+    },
+    getMembershipInOrg: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/memberships/:username"
+    },
+    getMembershipLegacy: {
+      deprecated: "octokit.teams.getMembershipLegacy() is deprecated, see https://developer.github.com/v3/teams/members/#get-team-membership-legacy",
+      method: "GET",
+      params: {
+        team_id: {
+          required: true,
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/teams/:team_id/memberships/:username"
+    },
+    list: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/orgs/:org/teams"
+    },
+    listChild: {
+      deprecated: "octokit.teams.listChild() has been renamed to octokit.teams.listChildLegacy() (2020-01-16)",
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/teams"
+    },
+    listChildInOrg: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/teams"
+    },
+    listChildLegacy: {
+      deprecated: "octokit.teams.listChildLegacy() is deprecated, see https://developer.github.com/v3/teams/#list-child-teams-legacy",
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/teams"
+    },
+    listDiscussionComments: {
+      deprecated: "octokit.teams.listDiscussionComments() has been renamed to octokit.teams.listDiscussionCommentsLegacy() (2020-01-16)",
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/comments"
+    },
+    listDiscussionCommentsInOrg: {
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/discussions/:discussion_number/comments"
+    },
+    listDiscussionCommentsLegacy: {
+      deprecated: "octokit.teams.listDiscussionCommentsLegacy() is deprecated, see https://developer.github.com/v3/teams/discussion_comments/#list-comments-legacy",
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/comments"
+    },
+    listDiscussions: {
+      deprecated: "octokit.teams.listDiscussions() has been renamed to octokit.teams.listDiscussionsLegacy() (2020-01-16)",
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions"
+    },
+    listDiscussionsInOrg: {
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/discussions"
+    },
+    listDiscussionsLegacy: {
+      deprecated: "octokit.teams.listDiscussionsLegacy() is deprecated, see https://developer.github.com/v3/teams/discussions/#list-discussions-legacy",
+      method: "GET",
+      params: {
+        direction: {
+          enum: ["asc", "desc"],
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions"
+    },
+    listForAuthenticatedUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/user/teams"
+    },
+    listMembers: {
+      deprecated: "octokit.teams.listMembers() has been renamed to octokit.teams.listMembersLegacy() (2020-01-16)",
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        role: {
+          enum: ["member", "maintainer", "all"],
+          type: "string"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/members"
+    },
+    listMembersInOrg: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        role: {
+          enum: ["member", "maintainer", "all"],
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/members"
+    },
+    listMembersLegacy: {
+      deprecated: "octokit.teams.listMembersLegacy() is deprecated, see https://developer.github.com/v3/teams/members/#list-team-members-legacy",
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        role: {
+          enum: ["member", "maintainer", "all"],
+          type: "string"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/members"
+    },
+    listPendingInvitations: {
+      deprecated: "octokit.teams.listPendingInvitations() has been renamed to octokit.teams.listPendingInvitationsLegacy() (2020-01-16)",
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/invitations"
+    },
+    listPendingInvitationsInOrg: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/invitations"
+    },
+    listPendingInvitationsLegacy: {
+      deprecated: "octokit.teams.listPendingInvitationsLegacy() is deprecated, see https://developer.github.com/v3/teams/members/#list-pending-team-invitations-legacy",
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/invitations"
+    },
+    listProjects: {
+      deprecated: "octokit.teams.listProjects() has been renamed to octokit.teams.listProjectsLegacy() (2020-01-16)",
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/projects"
+    },
+    listProjectsInOrg: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/projects"
+    },
+    listProjectsLegacy: {
+      deprecated: "octokit.teams.listProjectsLegacy() is deprecated, see https://developer.github.com/v3/teams/#list-team-projects-legacy",
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/projects"
+    },
+    listRepos: {
+      deprecated: "octokit.teams.listRepos() has been renamed to octokit.teams.listReposLegacy() (2020-01-16)",
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/repos"
+    },
+    listReposInOrg: {
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/repos"
+    },
+    listReposLegacy: {
+      deprecated: "octokit.teams.listReposLegacy() is deprecated, see https://developer.github.com/v3/teams/#list-team-repos-legacy",
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/repos"
+    },
+    removeMember: {
+      deprecated: "octokit.teams.removeMember() has been renamed to octokit.teams.removeMemberLegacy() (2020-01-16)",
+      method: "DELETE",
+      params: {
+        team_id: {
+          required: true,
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/teams/:team_id/members/:username"
+    },
+    removeMemberLegacy: {
+      deprecated: "octokit.teams.removeMemberLegacy() is deprecated, see https://developer.github.com/v3/teams/members/#remove-team-member-legacy",
+      method: "DELETE",
+      params: {
+        team_id: {
+          required: true,
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/teams/:team_id/members/:username"
+    },
+    removeMembership: {
+      deprecated: "octokit.teams.removeMembership() has been renamed to octokit.teams.removeMembershipLegacy() (2020-01-16)",
+      method: "DELETE",
+      params: {
+        team_id: {
+          required: true,
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/teams/:team_id/memberships/:username"
+    },
+    removeMembershipInOrg: {
+      method: "DELETE",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/memberships/:username"
+    },
+    removeMembershipLegacy: {
+      deprecated: "octokit.teams.removeMembershipLegacy() is deprecated, see https://developer.github.com/v3/teams/members/#remove-team-membership-legacy",
+      method: "DELETE",
+      params: {
+        team_id: {
+          required: true,
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/teams/:team_id/memberships/:username"
+    },
+    removeProject: {
+      deprecated: "octokit.teams.removeProject() has been renamed to octokit.teams.removeProjectLegacy() (2020-01-16)",
+      method: "DELETE",
+      params: {
+        project_id: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/projects/:project_id"
+    },
+    removeProjectInOrg: {
+      method: "DELETE",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        project_id: {
+          required: true,
+          type: "integer"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/projects/:project_id"
+    },
+    removeProjectLegacy: {
+      deprecated: "octokit.teams.removeProjectLegacy() is deprecated, see https://developer.github.com/v3/teams/#remove-team-project-legacy",
+      method: "DELETE",
+      params: {
+        project_id: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/projects/:project_id"
+    },
+    removeRepo: {
+      deprecated: "octokit.teams.removeRepo() has been renamed to octokit.teams.removeRepoLegacy() (2020-01-16)",
+      method: "DELETE",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/repos/:owner/:repo"
+    },
+    removeRepoInOrg: {
+      method: "DELETE",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/repos/:owner/:repo"
+    },
+    removeRepoLegacy: {
+      deprecated: "octokit.teams.removeRepoLegacy() is deprecated, see https://developer.github.com/v3/teams/#remove-team-repository-legacy",
+      method: "DELETE",
+      params: {
+        owner: {
+          required: true,
+          type: "string"
+        },
+        repo: {
+          required: true,
+          type: "string"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/repos/:owner/:repo"
+    },
+    reviewProject: {
+      deprecated: "octokit.teams.reviewProject() has been renamed to octokit.teams.reviewProjectLegacy() (2020-01-16)",
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "GET",
+      params: {
+        project_id: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/projects/:project_id"
+    },
+    reviewProjectInOrg: {
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "GET",
+      params: {
+        org: {
+          required: true,
+          type: "string"
+        },
+        project_id: {
+          required: true,
+          type: "integer"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/projects/:project_id"
+    },
+    reviewProjectLegacy: {
+      deprecated: "octokit.teams.reviewProjectLegacy() is deprecated, see https://developer.github.com/v3/teams/#review-a-team-project-legacy",
+      headers: {
+        accept: "application/vnd.github.inertia-preview+json"
+      },
+      method: "GET",
+      params: {
+        project_id: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/projects/:project_id"
+    },
+    update: {
+      deprecated: "octokit.teams.update() has been renamed to octokit.teams.updateLegacy() (2020-01-16)",
+      method: "PATCH",
+      params: {
+        description: {
+          type: "string"
+        },
+        name: {
+          required: true,
+          type: "string"
+        },
+        parent_team_id: {
+          type: "integer"
+        },
+        permission: {
+          enum: ["pull", "push", "admin"],
+          type: "string"
+        },
+        privacy: {
+          enum: ["secret", "closed"],
+          type: "string"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id"
+    },
+    updateDiscussion: {
+      deprecated: "octokit.teams.updateDiscussion() has been renamed to octokit.teams.updateDiscussionLegacy() (2020-01-16)",
+      method: "PATCH",
+      params: {
+        body: {
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        },
+        title: {
+          type: "string"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number"
+    },
+    updateDiscussionComment: {
+      deprecated: "octokit.teams.updateDiscussionComment() has been renamed to octokit.teams.updateDiscussionCommentLegacy() (2020-01-16)",
+      method: "PATCH",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        comment_number: {
+          required: true,
+          type: "integer"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/comments/:comment_number"
+    },
+    updateDiscussionCommentInOrg: {
+      method: "PATCH",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        comment_number: {
+          required: true,
+          type: "integer"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/discussions/:discussion_number/comments/:comment_number"
+    },
+    updateDiscussionCommentLegacy: {
+      deprecated: "octokit.teams.updateDiscussionCommentLegacy() is deprecated, see https://developer.github.com/v3/teams/discussion_comments/#edit-a-comment-legacy",
+      method: "PATCH",
+      params: {
+        body: {
+          required: true,
+          type: "string"
+        },
+        comment_number: {
+          required: true,
+          type: "integer"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number/comments/:comment_number"
+    },
+    updateDiscussionInOrg: {
+      method: "PATCH",
+      params: {
+        body: {
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        },
+        title: {
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug/discussions/:discussion_number"
+    },
+    updateDiscussionLegacy: {
+      deprecated: "octokit.teams.updateDiscussionLegacy() is deprecated, see https://developer.github.com/v3/teams/discussions/#edit-a-discussion-legacy",
+      method: "PATCH",
+      params: {
+        body: {
+          type: "string"
+        },
+        discussion_number: {
+          required: true,
+          type: "integer"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        },
+        title: {
+          type: "string"
+        }
+      },
+      url: "/teams/:team_id/discussions/:discussion_number"
+    },
+    updateInOrg: {
+      method: "PATCH",
+      params: {
+        description: {
+          type: "string"
+        },
+        name: {
+          required: true,
+          type: "string"
+        },
+        org: {
+          required: true,
+          type: "string"
+        },
+        parent_team_id: {
+          type: "integer"
+        },
+        permission: {
+          enum: ["pull", "push", "admin"],
+          type: "string"
+        },
+        privacy: {
+          enum: ["secret", "closed"],
+          type: "string"
+        },
+        team_slug: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/orgs/:org/teams/:team_slug"
+    },
+    updateLegacy: {
+      deprecated: "octokit.teams.updateLegacy() is deprecated, see https://developer.github.com/v3/teams/#edit-team-legacy",
+      method: "PATCH",
+      params: {
+        description: {
+          type: "string"
+        },
+        name: {
+          required: true,
+          type: "string"
+        },
+        parent_team_id: {
+          type: "integer"
+        },
+        permission: {
+          enum: ["pull", "push", "admin"],
+          type: "string"
+        },
+        privacy: {
+          enum: ["secret", "closed"],
+          type: "string"
+        },
+        team_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/teams/:team_id"
+    }
+  },
+  users: {
+    addEmails: {
+      method: "POST",
+      params: {
+        emails: {
+          required: true,
+          type: "string[]"
+        }
+      },
+      url: "/user/emails"
+    },
+    block: {
+      method: "PUT",
+      params: {
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/user/blocks/:username"
+    },
+    checkBlocked: {
+      method: "GET",
+      params: {
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/user/blocks/:username"
+    },
+    checkFollowing: {
+      method: "GET",
+      params: {
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/user/following/:username"
+    },
+    checkFollowingForUser: {
+      method: "GET",
+      params: {
+        target_user: {
+          required: true,
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/following/:target_user"
+    },
+    createGpgKey: {
+      method: "POST",
+      params: {
+        armored_public_key: {
+          type: "string"
+        }
+      },
+      url: "/user/gpg_keys"
+    },
+    createPublicKey: {
+      method: "POST",
+      params: {
+        key: {
+          type: "string"
+        },
+        title: {
+          type: "string"
+        }
+      },
+      url: "/user/keys"
+    },
+    deleteEmails: {
+      method: "DELETE",
+      params: {
+        emails: {
+          required: true,
+          type: "string[]"
+        }
+      },
+      url: "/user/emails"
+    },
+    deleteGpgKey: {
+      method: "DELETE",
+      params: {
+        gpg_key_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/user/gpg_keys/:gpg_key_id"
+    },
+    deletePublicKey: {
+      method: "DELETE",
+      params: {
+        key_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/user/keys/:key_id"
+    },
+    follow: {
+      method: "PUT",
+      params: {
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/user/following/:username"
+    },
+    getAuthenticated: {
+      method: "GET",
+      params: {},
+      url: "/user"
+    },
+    getByUsername: {
+      method: "GET",
+      params: {
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username"
+    },
+    getContextForUser: {
+      method: "GET",
+      params: {
+        subject_id: {
+          type: "string"
+        },
+        subject_type: {
+          enum: ["organization", "repository", "issue", "pull_request"],
+          type: "string"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/hovercard"
+    },
+    getGpgKey: {
+      method: "GET",
+      params: {
+        gpg_key_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/user/gpg_keys/:gpg_key_id"
+    },
+    getPublicKey: {
+      method: "GET",
+      params: {
+        key_id: {
+          required: true,
+          type: "integer"
+        }
+      },
+      url: "/user/keys/:key_id"
+    },
+    list: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        since: {
+          type: "string"
+        }
+      },
+      url: "/users"
+    },
+    listBlocked: {
+      method: "GET",
+      params: {},
+      url: "/user/blocks"
+    },
+    listEmails: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/user/emails"
+    },
+    listFollowersForAuthenticatedUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/user/followers"
+    },
+    listFollowersForUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/followers"
+    },
+    listFollowingForAuthenticatedUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/user/following"
+    },
+    listFollowingForUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/following"
+    },
+    listGpgKeys: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/user/gpg_keys"
+    },
+    listGpgKeysForUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/gpg_keys"
+    },
+    listPublicEmails: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/user/public_emails"
+    },
+    listPublicKeys: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        }
+      },
+      url: "/user/keys"
+    },
+    listPublicKeysForUser: {
+      method: "GET",
+      params: {
+        page: {
+          type: "integer"
+        },
+        per_page: {
+          type: "integer"
+        },
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/users/:username/keys"
+    },
+    togglePrimaryEmailVisibility: {
+      method: "PATCH",
+      params: {
+        email: {
+          required: true,
+          type: "string"
+        },
+        visibility: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/user/email/visibility"
+    },
+    unblock: {
+      method: "DELETE",
+      params: {
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/user/blocks/:username"
+    },
+    unfollow: {
+      method: "DELETE",
+      params: {
+        username: {
+          required: true,
+          type: "string"
+        }
+      },
+      url: "/user/following/:username"
+    },
+    updateAuthenticated: {
+      method: "PATCH",
+      params: {
+        bio: {
+          type: "string"
+        },
+        blog: {
+          type: "string"
+        },
+        company: {
+          type: "string"
+        },
+        email: {
+          type: "string"
+        },
+        hireable: {
+          type: "boolean"
+        },
+        location: {
+          type: "string"
+        },
+        name: {
+          type: "string"
+        }
+      },
+      url: "/user"
+    }
+  }
+};
+
+const VERSION = "2.1.3";
+
+function registerEndpoints(octokit, routes) {
+  Object.keys(routes).forEach(namespaceName => {
+    if (!octokit[namespaceName]) {
+      octokit[namespaceName] = {};
+    }
+
+    Object.keys(routes[namespaceName]).forEach(apiName => {
+      const apiOptions = routes[namespaceName][apiName];
+      const endpointDefaults = ["method", "url", "headers"].reduce((map, key) => {
+        if (typeof apiOptions[key] !== "undefined") {
+          map[key] = apiOptions[key];
+        }
+
+        return map;
+      }, {});
+      endpointDefaults.request = {
+        validate: apiOptions.params
+      };
+      let request = octokit.request.defaults(endpointDefaults); // patch request & endpoint methods to support deprecated parameters.
+      // Not the most elegant solution, but we don’t want to move deprecation
+      // logic into octokit/endpoint.js as it’s out of scope
+
+      const hasDeprecatedParam = Object.keys(apiOptions.params || {}).find(key => apiOptions.params[key].deprecated);
+
+      if (hasDeprecatedParam) {
+        const patch = patchForDeprecation.bind(null, octokit, apiOptions);
+        request = patch(octokit.request.defaults(endpointDefaults), `.${namespaceName}.${apiName}()`);
+        request.endpoint = patch(request.endpoint, `.${namespaceName}.${apiName}.endpoint()`);
+        request.endpoint.merge = patch(request.endpoint.merge, `.${namespaceName}.${apiName}.endpoint.merge()`);
+      }
+
+      if (apiOptions.deprecated) {
+        octokit[namespaceName][apiName] = Object.assign(function deprecatedEndpointMethod() {
+          octokit.log.warn(new deprecation.Deprecation(`[@octokit/rest] ${apiOptions.deprecated}`));
+          octokit[namespaceName][apiName] = request;
+          return request.apply(null, arguments);
+        }, request);
+        return;
+      }
+
+      octokit[namespaceName][apiName] = request;
+    });
+  });
+}
+
+function patchForDeprecation(octokit, apiOptions, method, methodName) {
+  const patchedMethod = options => {
+    options = Object.assign({}, options);
+    Object.keys(options).forEach(key => {
+      if (apiOptions.params[key] && apiOptions.params[key].deprecated) {
+        const aliasKey = apiOptions.params[key].alias;
+        octokit.log.warn(new deprecation.Deprecation(`[@octokit/rest] "${key}" parameter is deprecated for "${methodName}". Use "${aliasKey}" instead`));
+
+        if (!(aliasKey in options)) {
+          options[aliasKey] = options[key];
+        }
+
+        delete options[key];
+      }
+    });
+    return method(options);
+  };
+
+  Object.keys(method).forEach(key => {
+    patchedMethod[key] = method[key];
+  });
+  return patchedMethod;
+}
+
+/**
+ * This plugin is a 1:1 copy of internal @octokit/rest plugins. The primary
+ * goal is to rebuild @octokit/rest on top of @octokit/core. Once that is
+ * done, we will remove the registerEndpoints methods and return the methods
+ * directly as with the other plugins. At that point we will also remove the
+ * legacy workarounds and deprecations.
+ *
+ * See the plan at
+ * https://github.com/octokit/plugin-rest-endpoint-methods.js/pull/1
+ */
+
+function restEndpointMethods(octokit) {
+  // @ts-ignore
+  octokit.registerEndpoints = registerEndpoints.bind(null, octokit); // Aliasing scopes for backward compatibility
+  // See https://github.com/octokit/rest.js/pull/1134
+  // @ts-ignore
+
+  registerEndpoints(octokit, Object.assign(endpointsByScope, {
+    gitdata: endpointsByScope.git,
+    authorization: endpointsByScope.oauthAuthorizations,
+    pullRequests: endpointsByScope.pulls
+  }));
+  return {};
+}
+restEndpointMethods.VERSION = VERSION;
+
+exports.restEndpointMethods = restEndpointMethods;
+//# sourceMappingURL=index.js.map
+
+
+/***/ }),
 /* 843 */,
 /* 844 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
@@ -33382,7 +54682,24 @@ exports.getPublicSuffix = getPublicSuffix;
 /***/ }),
 /* 848 */,
 /* 849 */,
-/* 850 */,
+/* 850 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = paginationMethodsPlugin
+
+function paginationMethodsPlugin (octokit) {
+  octokit.getFirstPage = __webpack_require__(777).bind(null, octokit)
+  octokit.getLastPage = __webpack_require__(649).bind(null, octokit)
+  octokit.getNextPage = __webpack_require__(550).bind(null, octokit)
+  octokit.getPreviousPage = __webpack_require__(563).bind(null, octokit)
+  octokit.hasFirstPage = __webpack_require__(536)
+  octokit.hasLastPage = __webpack_require__(336)
+  octokit.hasNextPage = __webpack_require__(929)
+  octokit.hasPreviousPage = __webpack_require__(558)
+}
+
+
+/***/ }),
 /* 851 */,
 /* 852 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
@@ -33391,19 +54708,19 @@ exports.getPublicSuffix = getPublicSuffix;
 
 module.exports = Key;
 
-var assert = __webpack_require__(489);
+var assert = __webpack_require__(757);
 var algs = __webpack_require__(98);
 var crypto = __webpack_require__(417);
 var Fingerprint = __webpack_require__(400);
 var Signature = __webpack_require__(575);
 var DiffieHellman = __webpack_require__(290).DiffieHellman;
-var errs = __webpack_require__(753);
+var errs = __webpack_require__(570);
 var utils = __webpack_require__(270);
 var PrivateKey = __webpack_require__(502);
 var edCompat;
 
 try {
-	edCompat = __webpack_require__(363);
+	edCompat = __webpack_require__(1);
 } catch (e) {
 	/* Just continue through, and bail out if we try to use it. */
 }
@@ -35078,289 +56395,965 @@ Object.defineProperty(exports, '__esModule', { value: true });
 
 
 /***/ }),
-/* 854 */,
+/* 854 */
+/***/ (function(module) {
+
+/**
+ * lodash (Custom Build) <https://lodash.com/>
+ * Build: `lodash modularize exports="npm" -o ./`
+ * Copyright jQuery Foundation and other contributors <https://jquery.org/>
+ * Released under MIT license <https://lodash.com/license>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ */
+
+/** Used as the `TypeError` message for "Functions" methods. */
+var FUNC_ERROR_TEXT = 'Expected a function';
+
+/** Used to stand-in for `undefined` hash values. */
+var HASH_UNDEFINED = '__lodash_hash_undefined__';
+
+/** Used as references for various `Number` constants. */
+var INFINITY = 1 / 0;
+
+/** `Object#toString` result references. */
+var funcTag = '[object Function]',
+    genTag = '[object GeneratorFunction]',
+    symbolTag = '[object Symbol]';
+
+/** Used to match property names within property paths. */
+var reIsDeepProp = /\.|\[(?:[^[\]]*|(["'])(?:(?!\1)[^\\]|\\.)*?\1)\]/,
+    reIsPlainProp = /^\w*$/,
+    reLeadingDot = /^\./,
+    rePropName = /[^.[\]]+|\[(?:(-?\d+(?:\.\d+)?)|(["'])((?:(?!\2)[^\\]|\\.)*?)\2)\]|(?=(?:\.|\[\])(?:\.|\[\]|$))/g;
+
+/**
+ * Used to match `RegExp`
+ * [syntax characters](http://ecma-international.org/ecma-262/7.0/#sec-patterns).
+ */
+var reRegExpChar = /[\\^$.*+?()[\]{}|]/g;
+
+/** Used to match backslashes in property paths. */
+var reEscapeChar = /\\(\\)?/g;
+
+/** Used to detect host constructors (Safari). */
+var reIsHostCtor = /^\[object .+?Constructor\]$/;
+
+/** Detect free variable `global` from Node.js. */
+var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
+
+/** Detect free variable `self`. */
+var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
+
+/** Used as a reference to the global object. */
+var root = freeGlobal || freeSelf || Function('return this')();
+
+/**
+ * Gets the value at `key` of `object`.
+ *
+ * @private
+ * @param {Object} [object] The object to query.
+ * @param {string} key The key of the property to get.
+ * @returns {*} Returns the property value.
+ */
+function getValue(object, key) {
+  return object == null ? undefined : object[key];
+}
+
+/**
+ * Checks if `value` is a host object in IE < 9.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a host object, else `false`.
+ */
+function isHostObject(value) {
+  // Many host objects are `Object` objects that can coerce to strings
+  // despite having improperly defined `toString` methods.
+  var result = false;
+  if (value != null && typeof value.toString != 'function') {
+    try {
+      result = !!(value + '');
+    } catch (e) {}
+  }
+  return result;
+}
+
+/** Used for built-in method references. */
+var arrayProto = Array.prototype,
+    funcProto = Function.prototype,
+    objectProto = Object.prototype;
+
+/** Used to detect overreaching core-js shims. */
+var coreJsData = root['__core-js_shared__'];
+
+/** Used to detect methods masquerading as native. */
+var maskSrcKey = (function() {
+  var uid = /[^.]+$/.exec(coreJsData && coreJsData.keys && coreJsData.keys.IE_PROTO || '');
+  return uid ? ('Symbol(src)_1.' + uid) : '';
+}());
+
+/** Used to resolve the decompiled source of functions. */
+var funcToString = funcProto.toString;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/**
+ * Used to resolve the
+ * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
+ * of values.
+ */
+var objectToString = objectProto.toString;
+
+/** Used to detect if a method is native. */
+var reIsNative = RegExp('^' +
+  funcToString.call(hasOwnProperty).replace(reRegExpChar, '\\$&')
+  .replace(/hasOwnProperty|(function).*?(?=\\\()| for .+?(?=\\\])/g, '$1.*?') + '$'
+);
+
+/** Built-in value references. */
+var Symbol = root.Symbol,
+    splice = arrayProto.splice;
+
+/* Built-in method references that are verified to be native. */
+var Map = getNative(root, 'Map'),
+    nativeCreate = getNative(Object, 'create');
+
+/** Used to convert symbols to primitives and strings. */
+var symbolProto = Symbol ? Symbol.prototype : undefined,
+    symbolToString = symbolProto ? symbolProto.toString : undefined;
+
+/**
+ * Creates a hash object.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [entries] The key-value pairs to cache.
+ */
+function Hash(entries) {
+  var index = -1,
+      length = entries ? entries.length : 0;
+
+  this.clear();
+  while (++index < length) {
+    var entry = entries[index];
+    this.set(entry[0], entry[1]);
+  }
+}
+
+/**
+ * Removes all key-value entries from the hash.
+ *
+ * @private
+ * @name clear
+ * @memberOf Hash
+ */
+function hashClear() {
+  this.__data__ = nativeCreate ? nativeCreate(null) : {};
+}
+
+/**
+ * Removes `key` and its value from the hash.
+ *
+ * @private
+ * @name delete
+ * @memberOf Hash
+ * @param {Object} hash The hash to modify.
+ * @param {string} key The key of the value to remove.
+ * @returns {boolean} Returns `true` if the entry was removed, else `false`.
+ */
+function hashDelete(key) {
+  return this.has(key) && delete this.__data__[key];
+}
+
+/**
+ * Gets the hash value for `key`.
+ *
+ * @private
+ * @name get
+ * @memberOf Hash
+ * @param {string} key The key of the value to get.
+ * @returns {*} Returns the entry value.
+ */
+function hashGet(key) {
+  var data = this.__data__;
+  if (nativeCreate) {
+    var result = data[key];
+    return result === HASH_UNDEFINED ? undefined : result;
+  }
+  return hasOwnProperty.call(data, key) ? data[key] : undefined;
+}
+
+/**
+ * Checks if a hash value for `key` exists.
+ *
+ * @private
+ * @name has
+ * @memberOf Hash
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function hashHas(key) {
+  var data = this.__data__;
+  return nativeCreate ? data[key] !== undefined : hasOwnProperty.call(data, key);
+}
+
+/**
+ * Sets the hash `key` to `value`.
+ *
+ * @private
+ * @name set
+ * @memberOf Hash
+ * @param {string} key The key of the value to set.
+ * @param {*} value The value to set.
+ * @returns {Object} Returns the hash instance.
+ */
+function hashSet(key, value) {
+  var data = this.__data__;
+  data[key] = (nativeCreate && value === undefined) ? HASH_UNDEFINED : value;
+  return this;
+}
+
+// Add methods to `Hash`.
+Hash.prototype.clear = hashClear;
+Hash.prototype['delete'] = hashDelete;
+Hash.prototype.get = hashGet;
+Hash.prototype.has = hashHas;
+Hash.prototype.set = hashSet;
+
+/**
+ * Creates an list cache object.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [entries] The key-value pairs to cache.
+ */
+function ListCache(entries) {
+  var index = -1,
+      length = entries ? entries.length : 0;
+
+  this.clear();
+  while (++index < length) {
+    var entry = entries[index];
+    this.set(entry[0], entry[1]);
+  }
+}
+
+/**
+ * Removes all key-value entries from the list cache.
+ *
+ * @private
+ * @name clear
+ * @memberOf ListCache
+ */
+function listCacheClear() {
+  this.__data__ = [];
+}
+
+/**
+ * Removes `key` and its value from the list cache.
+ *
+ * @private
+ * @name delete
+ * @memberOf ListCache
+ * @param {string} key The key of the value to remove.
+ * @returns {boolean} Returns `true` if the entry was removed, else `false`.
+ */
+function listCacheDelete(key) {
+  var data = this.__data__,
+      index = assocIndexOf(data, key);
+
+  if (index < 0) {
+    return false;
+  }
+  var lastIndex = data.length - 1;
+  if (index == lastIndex) {
+    data.pop();
+  } else {
+    splice.call(data, index, 1);
+  }
+  return true;
+}
+
+/**
+ * Gets the list cache value for `key`.
+ *
+ * @private
+ * @name get
+ * @memberOf ListCache
+ * @param {string} key The key of the value to get.
+ * @returns {*} Returns the entry value.
+ */
+function listCacheGet(key) {
+  var data = this.__data__,
+      index = assocIndexOf(data, key);
+
+  return index < 0 ? undefined : data[index][1];
+}
+
+/**
+ * Checks if a list cache value for `key` exists.
+ *
+ * @private
+ * @name has
+ * @memberOf ListCache
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function listCacheHas(key) {
+  return assocIndexOf(this.__data__, key) > -1;
+}
+
+/**
+ * Sets the list cache `key` to `value`.
+ *
+ * @private
+ * @name set
+ * @memberOf ListCache
+ * @param {string} key The key of the value to set.
+ * @param {*} value The value to set.
+ * @returns {Object} Returns the list cache instance.
+ */
+function listCacheSet(key, value) {
+  var data = this.__data__,
+      index = assocIndexOf(data, key);
+
+  if (index < 0) {
+    data.push([key, value]);
+  } else {
+    data[index][1] = value;
+  }
+  return this;
+}
+
+// Add methods to `ListCache`.
+ListCache.prototype.clear = listCacheClear;
+ListCache.prototype['delete'] = listCacheDelete;
+ListCache.prototype.get = listCacheGet;
+ListCache.prototype.has = listCacheHas;
+ListCache.prototype.set = listCacheSet;
+
+/**
+ * Creates a map cache object to store key-value pairs.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [entries] The key-value pairs to cache.
+ */
+function MapCache(entries) {
+  var index = -1,
+      length = entries ? entries.length : 0;
+
+  this.clear();
+  while (++index < length) {
+    var entry = entries[index];
+    this.set(entry[0], entry[1]);
+  }
+}
+
+/**
+ * Removes all key-value entries from the map.
+ *
+ * @private
+ * @name clear
+ * @memberOf MapCache
+ */
+function mapCacheClear() {
+  this.__data__ = {
+    'hash': new Hash,
+    'map': new (Map || ListCache),
+    'string': new Hash
+  };
+}
+
+/**
+ * Removes `key` and its value from the map.
+ *
+ * @private
+ * @name delete
+ * @memberOf MapCache
+ * @param {string} key The key of the value to remove.
+ * @returns {boolean} Returns `true` if the entry was removed, else `false`.
+ */
+function mapCacheDelete(key) {
+  return getMapData(this, key)['delete'](key);
+}
+
+/**
+ * Gets the map value for `key`.
+ *
+ * @private
+ * @name get
+ * @memberOf MapCache
+ * @param {string} key The key of the value to get.
+ * @returns {*} Returns the entry value.
+ */
+function mapCacheGet(key) {
+  return getMapData(this, key).get(key);
+}
+
+/**
+ * Checks if a map value for `key` exists.
+ *
+ * @private
+ * @name has
+ * @memberOf MapCache
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function mapCacheHas(key) {
+  return getMapData(this, key).has(key);
+}
+
+/**
+ * Sets the map `key` to `value`.
+ *
+ * @private
+ * @name set
+ * @memberOf MapCache
+ * @param {string} key The key of the value to set.
+ * @param {*} value The value to set.
+ * @returns {Object} Returns the map cache instance.
+ */
+function mapCacheSet(key, value) {
+  getMapData(this, key).set(key, value);
+  return this;
+}
+
+// Add methods to `MapCache`.
+MapCache.prototype.clear = mapCacheClear;
+MapCache.prototype['delete'] = mapCacheDelete;
+MapCache.prototype.get = mapCacheGet;
+MapCache.prototype.has = mapCacheHas;
+MapCache.prototype.set = mapCacheSet;
+
+/**
+ * Gets the index at which the `key` is found in `array` of key-value pairs.
+ *
+ * @private
+ * @param {Array} array The array to inspect.
+ * @param {*} key The key to search for.
+ * @returns {number} Returns the index of the matched value, else `-1`.
+ */
+function assocIndexOf(array, key) {
+  var length = array.length;
+  while (length--) {
+    if (eq(array[length][0], key)) {
+      return length;
+    }
+  }
+  return -1;
+}
+
+/**
+ * The base implementation of `_.get` without support for default values.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @param {Array|string} path The path of the property to get.
+ * @returns {*} Returns the resolved value.
+ */
+function baseGet(object, path) {
+  path = isKey(path, object) ? [path] : castPath(path);
+
+  var index = 0,
+      length = path.length;
+
+  while (object != null && index < length) {
+    object = object[toKey(path[index++])];
+  }
+  return (index && index == length) ? object : undefined;
+}
+
+/**
+ * The base implementation of `_.isNative` without bad shim checks.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a native function,
+ *  else `false`.
+ */
+function baseIsNative(value) {
+  if (!isObject(value) || isMasked(value)) {
+    return false;
+  }
+  var pattern = (isFunction(value) || isHostObject(value)) ? reIsNative : reIsHostCtor;
+  return pattern.test(toSource(value));
+}
+
+/**
+ * The base implementation of `_.toString` which doesn't convert nullish
+ * values to empty strings.
+ *
+ * @private
+ * @param {*} value The value to process.
+ * @returns {string} Returns the string.
+ */
+function baseToString(value) {
+  // Exit early for strings to avoid a performance hit in some environments.
+  if (typeof value == 'string') {
+    return value;
+  }
+  if (isSymbol(value)) {
+    return symbolToString ? symbolToString.call(value) : '';
+  }
+  var result = (value + '');
+  return (result == '0' && (1 / value) == -INFINITY) ? '-0' : result;
+}
+
+/**
+ * Casts `value` to a path array if it's not one.
+ *
+ * @private
+ * @param {*} value The value to inspect.
+ * @returns {Array} Returns the cast property path array.
+ */
+function castPath(value) {
+  return isArray(value) ? value : stringToPath(value);
+}
+
+/**
+ * Gets the data for `map`.
+ *
+ * @private
+ * @param {Object} map The map to query.
+ * @param {string} key The reference key.
+ * @returns {*} Returns the map data.
+ */
+function getMapData(map, key) {
+  var data = map.__data__;
+  return isKeyable(key)
+    ? data[typeof key == 'string' ? 'string' : 'hash']
+    : data.map;
+}
+
+/**
+ * Gets the native function at `key` of `object`.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @param {string} key The key of the method to get.
+ * @returns {*} Returns the function if it's native, else `undefined`.
+ */
+function getNative(object, key) {
+  var value = getValue(object, key);
+  return baseIsNative(value) ? value : undefined;
+}
+
+/**
+ * Checks if `value` is a property name and not a property path.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @param {Object} [object] The object to query keys on.
+ * @returns {boolean} Returns `true` if `value` is a property name, else `false`.
+ */
+function isKey(value, object) {
+  if (isArray(value)) {
+    return false;
+  }
+  var type = typeof value;
+  if (type == 'number' || type == 'symbol' || type == 'boolean' ||
+      value == null || isSymbol(value)) {
+    return true;
+  }
+  return reIsPlainProp.test(value) || !reIsDeepProp.test(value) ||
+    (object != null && value in Object(object));
+}
+
+/**
+ * Checks if `value` is suitable for use as unique object key.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is suitable, else `false`.
+ */
+function isKeyable(value) {
+  var type = typeof value;
+  return (type == 'string' || type == 'number' || type == 'symbol' || type == 'boolean')
+    ? (value !== '__proto__')
+    : (value === null);
+}
+
+/**
+ * Checks if `func` has its source masked.
+ *
+ * @private
+ * @param {Function} func The function to check.
+ * @returns {boolean} Returns `true` if `func` is masked, else `false`.
+ */
+function isMasked(func) {
+  return !!maskSrcKey && (maskSrcKey in func);
+}
+
+/**
+ * Converts `string` to a property path array.
+ *
+ * @private
+ * @param {string} string The string to convert.
+ * @returns {Array} Returns the property path array.
+ */
+var stringToPath = memoize(function(string) {
+  string = toString(string);
+
+  var result = [];
+  if (reLeadingDot.test(string)) {
+    result.push('');
+  }
+  string.replace(rePropName, function(match, number, quote, string) {
+    result.push(quote ? string.replace(reEscapeChar, '$1') : (number || match));
+  });
+  return result;
+});
+
+/**
+ * Converts `value` to a string key if it's not a string or symbol.
+ *
+ * @private
+ * @param {*} value The value to inspect.
+ * @returns {string|symbol} Returns the key.
+ */
+function toKey(value) {
+  if (typeof value == 'string' || isSymbol(value)) {
+    return value;
+  }
+  var result = (value + '');
+  return (result == '0' && (1 / value) == -INFINITY) ? '-0' : result;
+}
+
+/**
+ * Converts `func` to its source code.
+ *
+ * @private
+ * @param {Function} func The function to process.
+ * @returns {string} Returns the source code.
+ */
+function toSource(func) {
+  if (func != null) {
+    try {
+      return funcToString.call(func);
+    } catch (e) {}
+    try {
+      return (func + '');
+    } catch (e) {}
+  }
+  return '';
+}
+
+/**
+ * Creates a function that memoizes the result of `func`. If `resolver` is
+ * provided, it determines the cache key for storing the result based on the
+ * arguments provided to the memoized function. By default, the first argument
+ * provided to the memoized function is used as the map cache key. The `func`
+ * is invoked with the `this` binding of the memoized function.
+ *
+ * **Note:** The cache is exposed as the `cache` property on the memoized
+ * function. Its creation may be customized by replacing the `_.memoize.Cache`
+ * constructor with one whose instances implement the
+ * [`Map`](http://ecma-international.org/ecma-262/7.0/#sec-properties-of-the-map-prototype-object)
+ * method interface of `delete`, `get`, `has`, and `set`.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Function
+ * @param {Function} func The function to have its output memoized.
+ * @param {Function} [resolver] The function to resolve the cache key.
+ * @returns {Function} Returns the new memoized function.
+ * @example
+ *
+ * var object = { 'a': 1, 'b': 2 };
+ * var other = { 'c': 3, 'd': 4 };
+ *
+ * var values = _.memoize(_.values);
+ * values(object);
+ * // => [1, 2]
+ *
+ * values(other);
+ * // => [3, 4]
+ *
+ * object.a = 2;
+ * values(object);
+ * // => [1, 2]
+ *
+ * // Modify the result cache.
+ * values.cache.set(object, ['a', 'b']);
+ * values(object);
+ * // => ['a', 'b']
+ *
+ * // Replace `_.memoize.Cache`.
+ * _.memoize.Cache = WeakMap;
+ */
+function memoize(func, resolver) {
+  if (typeof func != 'function' || (resolver && typeof resolver != 'function')) {
+    throw new TypeError(FUNC_ERROR_TEXT);
+  }
+  var memoized = function() {
+    var args = arguments,
+        key = resolver ? resolver.apply(this, args) : args[0],
+        cache = memoized.cache;
+
+    if (cache.has(key)) {
+      return cache.get(key);
+    }
+    var result = func.apply(this, args);
+    memoized.cache = cache.set(key, result);
+    return result;
+  };
+  memoized.cache = new (memoize.Cache || MapCache);
+  return memoized;
+}
+
+// Assign cache to `_.memoize`.
+memoize.Cache = MapCache;
+
+/**
+ * Performs a
+ * [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
+ * comparison between two values to determine if they are equivalent.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to compare.
+ * @param {*} other The other value to compare.
+ * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
+ * @example
+ *
+ * var object = { 'a': 1 };
+ * var other = { 'a': 1 };
+ *
+ * _.eq(object, object);
+ * // => true
+ *
+ * _.eq(object, other);
+ * // => false
+ *
+ * _.eq('a', 'a');
+ * // => true
+ *
+ * _.eq('a', Object('a'));
+ * // => false
+ *
+ * _.eq(NaN, NaN);
+ * // => true
+ */
+function eq(value, other) {
+  return value === other || (value !== value && other !== other);
+}
+
+/**
+ * Checks if `value` is classified as an `Array` object.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an array, else `false`.
+ * @example
+ *
+ * _.isArray([1, 2, 3]);
+ * // => true
+ *
+ * _.isArray(document.body.children);
+ * // => false
+ *
+ * _.isArray('abc');
+ * // => false
+ *
+ * _.isArray(_.noop);
+ * // => false
+ */
+var isArray = Array.isArray;
+
+/**
+ * Checks if `value` is classified as a `Function` object.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a function, else `false`.
+ * @example
+ *
+ * _.isFunction(_);
+ * // => true
+ *
+ * _.isFunction(/abc/);
+ * // => false
+ */
+function isFunction(value) {
+  // The use of `Object#toString` avoids issues with the `typeof` operator
+  // in Safari 8-9 which returns 'object' for typed array and other constructors.
+  var tag = isObject(value) ? objectToString.call(value) : '';
+  return tag == funcTag || tag == genTag;
+}
+
+/**
+ * Checks if `value` is the
+ * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
+ * of `Object`. (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an object, else `false`.
+ * @example
+ *
+ * _.isObject({});
+ * // => true
+ *
+ * _.isObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isObject(_.noop);
+ * // => true
+ *
+ * _.isObject(null);
+ * // => false
+ */
+function isObject(value) {
+  var type = typeof value;
+  return !!value && (type == 'object' || type == 'function');
+}
+
+/**
+ * Checks if `value` is object-like. A value is object-like if it's not `null`
+ * and has a `typeof` result of "object".
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
+ * @example
+ *
+ * _.isObjectLike({});
+ * // => true
+ *
+ * _.isObjectLike([1, 2, 3]);
+ * // => true
+ *
+ * _.isObjectLike(_.noop);
+ * // => false
+ *
+ * _.isObjectLike(null);
+ * // => false
+ */
+function isObjectLike(value) {
+  return !!value && typeof value == 'object';
+}
+
+/**
+ * Checks if `value` is classified as a `Symbol` primitive or object.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a symbol, else `false`.
+ * @example
+ *
+ * _.isSymbol(Symbol.iterator);
+ * // => true
+ *
+ * _.isSymbol('abc');
+ * // => false
+ */
+function isSymbol(value) {
+  return typeof value == 'symbol' ||
+    (isObjectLike(value) && objectToString.call(value) == symbolTag);
+}
+
+/**
+ * Converts `value` to a string. An empty string is returned for `null`
+ * and `undefined` values. The sign of `-0` is preserved.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to process.
+ * @returns {string} Returns the string.
+ * @example
+ *
+ * _.toString(null);
+ * // => ''
+ *
+ * _.toString(-0);
+ * // => '-0'
+ *
+ * _.toString([1, 2, 3]);
+ * // => '1,2,3'
+ */
+function toString(value) {
+  return value == null ? '' : baseToString(value);
+}
+
+/**
+ * Gets the value at `path` of `object`. If the resolved value is
+ * `undefined`, the `defaultValue` is returned in its place.
+ *
+ * @static
+ * @memberOf _
+ * @since 3.7.0
+ * @category Object
+ * @param {Object} object The object to query.
+ * @param {Array|string} path The path of the property to get.
+ * @param {*} [defaultValue] The value returned for `undefined` resolved values.
+ * @returns {*} Returns the resolved value.
+ * @example
+ *
+ * var object = { 'a': [{ 'b': { 'c': 3 } }] };
+ *
+ * _.get(object, 'a[0].b.c');
+ * // => 3
+ *
+ * _.get(object, ['a', '0', 'b', 'c']);
+ * // => 3
+ *
+ * _.get(object, 'a.b.c', 'default');
+ * // => 'default'
+ */
+function get(object, path, defaultValue) {
+  var result = object == null ? undefined : baseGet(object, path);
+  return result === undefined ? defaultValue : result;
+}
+
+module.exports = get;
+
+
+/***/ }),
 /* 855 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
-"use strict";
+module.exports = registerPlugin;
 
+const factory = __webpack_require__(47);
 
-
-module.exports = {
-  copy: copy,
-  checkDataType: checkDataType,
-  checkDataTypes: checkDataTypes,
-  coerceToTypes: coerceToTypes,
-  toHash: toHash,
-  getProperty: getProperty,
-  escapeQuotes: escapeQuotes,
-  equal: __webpack_require__(930),
-  ucs2length: __webpack_require__(691),
-  varOccurences: varOccurences,
-  varReplace: varReplace,
-  cleanUpCode: cleanUpCode,
-  finalCleanUpCode: finalCleanUpCode,
-  schemaHasRules: schemaHasRules,
-  schemaHasRulesExcept: schemaHasRulesExcept,
-  schemaUnknownRules: schemaUnknownRules,
-  toQuotedString: toQuotedString,
-  getPathExpr: getPathExpr,
-  getPath: getPath,
-  getData: getData,
-  unescapeFragment: unescapeFragment,
-  unescapeJsonPointer: unescapeJsonPointer,
-  escapeFragment: escapeFragment,
-  escapeJsonPointer: escapeJsonPointer
-};
-
-
-function copy(o, to) {
-  to = to || {};
-  for (var key in o) to[key] = o[key];
-  return to;
-}
-
-
-function checkDataType(dataType, data, negate) {
-  var EQUAL = negate ? ' !== ' : ' === '
-    , AND = negate ? ' || ' : ' && '
-    , OK = negate ? '!' : ''
-    , NOT = negate ? '' : '!';
-  switch (dataType) {
-    case 'null': return data + EQUAL + 'null';
-    case 'array': return OK + 'Array.isArray(' + data + ')';
-    case 'object': return '(' + OK + data + AND +
-                          'typeof ' + data + EQUAL + '"object"' + AND +
-                          NOT + 'Array.isArray(' + data + '))';
-    case 'integer': return '(typeof ' + data + EQUAL + '"number"' + AND +
-                           NOT + '(' + data + ' % 1)' +
-                           AND + data + EQUAL + data + ')';
-    default: return 'typeof ' + data + EQUAL + '"' + dataType + '"';
-  }
-}
-
-
-function checkDataTypes(dataTypes, data) {
-  switch (dataTypes.length) {
-    case 1: return checkDataType(dataTypes[0], data, true);
-    default:
-      var code = '';
-      var types = toHash(dataTypes);
-      if (types.array && types.object) {
-        code = types.null ? '(': '(!' + data + ' || ';
-        code += 'typeof ' + data + ' !== "object")';
-        delete types.null;
-        delete types.array;
-        delete types.object;
-      }
-      if (types.number) delete types.integer;
-      for (var t in types)
-        code += (code ? ' && ' : '' ) + checkDataType(t, data, true);
-
-      return code;
-  }
-}
-
-
-var COERCE_TO_TYPES = toHash([ 'string', 'number', 'integer', 'boolean', 'null' ]);
-function coerceToTypes(optionCoerceTypes, dataTypes) {
-  if (Array.isArray(dataTypes)) {
-    var types = [];
-    for (var i=0; i<dataTypes.length; i++) {
-      var t = dataTypes[i];
-      if (COERCE_TO_TYPES[t]) types[types.length] = t;
-      else if (optionCoerceTypes === 'array' && t === 'array') types[types.length] = t;
-    }
-    if (types.length) return types;
-  } else if (COERCE_TO_TYPES[dataTypes]) {
-    return [dataTypes];
-  } else if (optionCoerceTypes === 'array' && dataTypes === 'array') {
-    return ['array'];
-  }
-}
-
-
-function toHash(arr) {
-  var hash = {};
-  for (var i=0; i<arr.length; i++) hash[arr[i]] = true;
-  return hash;
-}
-
-
-var IDENTIFIER = /^[a-z$_][a-z$_0-9]*$/i;
-var SINGLE_QUOTE = /'|\\/g;
-function getProperty(key) {
-  return typeof key == 'number'
-          ? '[' + key + ']'
-          : IDENTIFIER.test(key)
-            ? '.' + key
-            : "['" + escapeQuotes(key) + "']";
-}
-
-
-function escapeQuotes(str) {
-  return str.replace(SINGLE_QUOTE, '\\$&')
-            .replace(/\n/g, '\\n')
-            .replace(/\r/g, '\\r')
-            .replace(/\f/g, '\\f')
-            .replace(/\t/g, '\\t');
-}
-
-
-function varOccurences(str, dataVar) {
-  dataVar += '[^0-9]';
-  var matches = str.match(new RegExp(dataVar, 'g'));
-  return matches ? matches.length : 0;
-}
-
-
-function varReplace(str, dataVar, expr) {
-  dataVar += '([^0-9])';
-  expr = expr.replace(/\$/g, '$$$$');
-  return str.replace(new RegExp(dataVar, 'g'), expr + '$1');
-}
-
-
-var EMPTY_ELSE = /else\s*{\s*}/g
-  , EMPTY_IF_NO_ELSE = /if\s*\([^)]+\)\s*\{\s*\}(?!\s*else)/g
-  , EMPTY_IF_WITH_ELSE = /if\s*\(([^)]+)\)\s*\{\s*\}\s*else(?!\s*if)/g;
-function cleanUpCode(out) {
-  return out.replace(EMPTY_ELSE, '')
-            .replace(EMPTY_IF_NO_ELSE, '')
-            .replace(EMPTY_IF_WITH_ELSE, 'if (!($1))');
-}
-
-
-var ERRORS_REGEXP = /[^v.]errors/g
-  , REMOVE_ERRORS = /var errors = 0;|var vErrors = null;|validate.errors = vErrors;/g
-  , REMOVE_ERRORS_ASYNC = /var errors = 0;|var vErrors = null;/g
-  , RETURN_VALID = 'return errors === 0;'
-  , RETURN_TRUE = 'validate.errors = null; return true;'
-  , RETURN_ASYNC = /if \(errors === 0\) return data;\s*else throw new ValidationError\(vErrors\);/
-  , RETURN_DATA_ASYNC = 'return data;'
-  , ROOTDATA_REGEXP = /[^A-Za-z_$]rootData[^A-Za-z0-9_$]/g
-  , REMOVE_ROOTDATA = /if \(rootData === undefined\) rootData = data;/;
-
-function finalCleanUpCode(out, async) {
-  var matches = out.match(ERRORS_REGEXP);
-  if (matches && matches.length == 2) {
-    out = async
-          ? out.replace(REMOVE_ERRORS_ASYNC, '')
-               .replace(RETURN_ASYNC, RETURN_DATA_ASYNC)
-          : out.replace(REMOVE_ERRORS, '')
-               .replace(RETURN_VALID, RETURN_TRUE);
-  }
-
-  matches = out.match(ROOTDATA_REGEXP);
-  if (!matches || matches.length !== 3) return out;
-  return out.replace(REMOVE_ROOTDATA, '');
-}
-
-
-function schemaHasRules(schema, rules) {
-  if (typeof schema == 'boolean') return !schema;
-  for (var key in schema) if (rules[key]) return true;
-}
-
-
-function schemaHasRulesExcept(schema, rules, exceptKeyword) {
-  if (typeof schema == 'boolean') return !schema && exceptKeyword != 'not';
-  for (var key in schema) if (key != exceptKeyword && rules[key]) return true;
-}
-
-
-function schemaUnknownRules(schema, rules) {
-  if (typeof schema == 'boolean') return;
-  for (var key in schema) if (!rules[key]) return key;
-}
-
-
-function toQuotedString(str) {
-  return '\'' + escapeQuotes(str) + '\'';
-}
-
-
-function getPathExpr(currentPath, expr, jsonPointers, isNumber) {
-  var path = jsonPointers // false by default
-              ? '\'/\' + ' + expr + (isNumber ? '' : '.replace(/~/g, \'~0\').replace(/\\//g, \'~1\')')
-              : (isNumber ? '\'[\' + ' + expr + ' + \']\'' : '\'[\\\'\' + ' + expr + ' + \'\\\']\'');
-  return joinPaths(currentPath, path);
-}
-
-
-function getPath(currentPath, prop, jsonPointers) {
-  var path = jsonPointers // false by default
-              ? toQuotedString('/' + escapeJsonPointer(prop))
-              : toQuotedString(getProperty(prop));
-  return joinPaths(currentPath, path);
-}
-
-
-var JSON_POINTER = /^\/(?:[^~]|~0|~1)*$/;
-var RELATIVE_JSON_POINTER = /^([0-9]+)(#|\/(?:[^~]|~0|~1)*)?$/;
-function getData($data, lvl, paths) {
-  var up, jsonPointer, data, matches;
-  if ($data === '') return 'rootData';
-  if ($data[0] == '/') {
-    if (!JSON_POINTER.test($data)) throw new Error('Invalid JSON-pointer: ' + $data);
-    jsonPointer = $data;
-    data = 'rootData';
-  } else {
-    matches = $data.match(RELATIVE_JSON_POINTER);
-    if (!matches) throw new Error('Invalid JSON-pointer: ' + $data);
-    up = +matches[1];
-    jsonPointer = matches[2];
-    if (jsonPointer == '#') {
-      if (up >= lvl) throw new Error('Cannot access property/index ' + up + ' levels up, current level is ' + lvl);
-      return paths[lvl - up];
-    }
-
-    if (up > lvl) throw new Error('Cannot access data ' + up + ' levels up, current level is ' + lvl);
-    data = 'data' + ((lvl - up) || '');
-    if (!jsonPointer) return data;
-  }
-
-  var expr = data;
-  var segments = jsonPointer.split('/');
-  for (var i=0; i<segments.length; i++) {
-    var segment = segments[i];
-    if (segment) {
-      data += getProperty(unescapeJsonPointer(segment));
-      expr += ' && ' + data;
-    }
-  }
-  return expr;
-}
-
-
-function joinPaths (a, b) {
-  if (a == '""') return b;
-  return (a + ' + ' + b).replace(/' \+ '/g, '');
-}
-
-
-function unescapeFragment(str) {
-  return unescapeJsonPointer(decodeURIComponent(str));
-}
-
-
-function escapeFragment(str) {
-  return encodeURIComponent(escapeJsonPointer(str));
-}
-
-
-function escapeJsonPointer(str) {
-  return str.replace(/~/g, '~0').replace(/\//g, '~1');
-}
-
-
-function unescapeJsonPointer(str) {
-  return str.replace(/~1/g, '/').replace(/~0/g, '~');
+function registerPlugin(plugins, pluginFunction) {
+  return factory(
+    plugins.includes(pluginFunction) ? plugins : plugins.concat(pluginFunction)
+  );
 }
 
 
 /***/ }),
-/* 856 */,
+/* 856 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = __webpack_require__(141);
+
+
+/***/ }),
 /* 857 */,
 /* 858 */
 /***/ (function(module) {
@@ -35642,11 +57635,111 @@ module.exports = function generate_required(it, $keyword, $ruleType) {
 /* 859 */,
 /* 860 */,
 /* 861 */,
-/* 862 */,
-/* 863 */,
+/* 862 */
+/***/ (function(__unusedmodule, exports) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+class CustomFieldDefaultsImpl {
+    constructor() {
+        this.canBeEmpty = false;
+        this.emptyFieldText = '';
+        this.isPublic = false;
+        this.id = '';
+    }
+}
+exports.CustomFieldDefaultsImpl = CustomFieldDefaultsImpl;
+
+
+/***/ }),
+/* 863 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = authenticationBeforeRequest;
+
+const btoa = __webpack_require__(675);
+
+const withAuthorizationPrefix = __webpack_require__(143);
+
+function authenticationBeforeRequest(state, options) {
+  if (typeof state.auth === "string") {
+    options.headers.authorization = withAuthorizationPrefix(state.auth);
+    return;
+  }
+
+  if (state.auth.username) {
+    const hash = btoa(`${state.auth.username}:${state.auth.password}`);
+    options.headers.authorization = `Basic ${hash}`;
+    if (state.otp) {
+      options.headers["x-github-otp"] = state.otp;
+    }
+    return;
+  }
+
+  if (state.auth.clientId) {
+    // There is a special case for OAuth applications, when `clientId` and `clientSecret` is passed as
+    // Basic Authorization instead of query parameters. The only routes where that applies share the same
+    // URL though: `/applications/:client_id/tokens/:access_token`.
+    //
+    //  1. [Check an authorization](https://developer.github.com/v3/oauth_authorizations/#check-an-authorization)
+    //  2. [Reset an authorization](https://developer.github.com/v3/oauth_authorizations/#reset-an-authorization)
+    //  3. [Revoke an authorization for an application](https://developer.github.com/v3/oauth_authorizations/#revoke-an-authorization-for-an-application)
+    //
+    // We identify by checking the URL. It must merge both "/applications/:client_id/tokens/:access_token"
+    // as well as "/applications/123/tokens/token456"
+    if (/\/applications\/:?[\w_]+\/tokens\/:?[\w_]+($|\?)/.test(options.url)) {
+      const hash = btoa(`${state.auth.clientId}:${state.auth.clientSecret}`);
+      options.headers.authorization = `Basic ${hash}`;
+      return;
+    }
+
+    options.url += options.url.indexOf("?") === -1 ? "?" : "&";
+    options.url += `client_id=${state.auth.clientId}&client_secret=${state.auth.clientSecret}`;
+    return;
+  }
+
+  return Promise.resolve()
+
+    .then(() => {
+      return state.auth();
+    })
+
+    .then(authorization => {
+      options.headers.authorization = withAuthorizationPrefix(authorization);
+    });
+}
+
+
+/***/ }),
 /* 864 */,
 /* 865 */,
-/* 866 */,
+/* 866 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+var shebangRegex = __webpack_require__(816);
+
+module.exports = function (str) {
+	var match = str.match(shebangRegex);
+
+	if (!match) {
+		return null;
+	}
+
+	var arr = match[0].replace(/#! ?/, '').split(' ');
+	var bin = arr[0].split('/').pop();
+	var arg = arr[1];
+
+	return (bin === 'env' ?
+		arg :
+		bin + (arg ? ' ' + arg : '')
+	);
+};
+
+
+/***/ }),
 /* 867 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
@@ -35655,8 +57748,8 @@ module.exports = function generate_required(it, $keyword, $ruleType) {
 
 var URI = __webpack_require__(853)
   , equal = __webpack_require__(930)
-  , util = __webpack_require__(855)
-  , SchemaObject = __webpack_require__(955)
+  , util = __webpack_require__(949)
+  , SchemaObject = __webpack_require__(474)
   , traverse = __webpack_require__(340);
 
 module.exports = resolve;
@@ -35938,158 +58031,68 @@ function resolveIds(schema) {
 /* 879 */,
 /* 880 */,
 /* 881 */
-/***/ (function(module, __unusedexports, __webpack_require__) {
+/***/ (function(module) {
 
 "use strict";
 
 
-var util = __webpack_require__(855);
+const isWin = process.platform === 'win32';
 
-var DATE = /^(\d\d\d\d)-(\d\d)-(\d\d)$/;
-var DAYS = [0,31,28,31,30,31,30,31,31,30,31,30,31];
-var TIME = /^(\d\d):(\d\d):(\d\d)(\.\d+)?(z|[+-]\d\d:\d\d)?$/i;
-var HOSTNAME = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[-0-9a-z]{0,61}[0-9a-z])?)*$/i;
-var URI = /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)(?:\?(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i;
-var URIREF = /^(?:[a-z][a-z0-9+\-.]*:)?(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'"()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*)?(?:\?(?:[a-z0-9\-._~!$&'"()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'"()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i;
-// uri-template: https://tools.ietf.org/html/rfc6570
-var URITEMPLATE = /^(?:(?:[^\x00-\x20"'<>%\\^`{|}]|%[0-9a-f]{2})|\{[+#./;?&=,!@|]?(?:[a-z0-9_]|%[0-9a-f]{2})+(?::[1-9][0-9]{0,3}|\*)?(?:,(?:[a-z0-9_]|%[0-9a-f]{2})+(?::[1-9][0-9]{0,3}|\*)?)*\})*$/i;
-// For the source: https://gist.github.com/dperini/729294
-// For test cases: https://mathiasbynens.be/demo/url-regex
-// @todo Delete current URL in favour of the commented out URL rule when this issue is fixed https://github.com/eslint/eslint/issues/7983.
-// var URL = /^(?:(?:https?|ftp):\/\/)(?:\S+(?::\S*)?@)?(?:(?!10(?:\.\d{1,3}){3})(?!127(?:\.\d{1,3}){3})(?!169\.254(?:\.\d{1,3}){2})(?!192\.168(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\u{00a1}-\u{ffff}0-9]+-?)*[a-z\u{00a1}-\u{ffff}0-9]+)(?:\.(?:[a-z\u{00a1}-\u{ffff}0-9]+-?)*[a-z\u{00a1}-\u{ffff}0-9]+)*(?:\.(?:[a-z\u{00a1}-\u{ffff}]{2,})))(?::\d{2,5})?(?:\/[^\s]*)?$/iu;
-var URL = /^(?:(?:http[s\u017F]?|ftp):\/\/)(?:(?:[\0-\x08\x0E-\x1F!-\x9F\xA1-\u167F\u1681-\u1FFF\u200B-\u2027\u202A-\u202E\u2030-\u205E\u2060-\u2FFF\u3001-\uD7FF\uE000-\uFEFE\uFF00-\uFFFF]|[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])+(?::(?:[\0-\x08\x0E-\x1F!-\x9F\xA1-\u167F\u1681-\u1FFF\u200B-\u2027\u202A-\u202E\u2030-\u205E\u2060-\u2FFF\u3001-\uD7FF\uE000-\uFEFE\uFF00-\uFFFF]|[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])*)?@)?(?:(?!10(?:\.[0-9]{1,3}){3})(?!127(?:\.[0-9]{1,3}){3})(?!169\.254(?:\.[0-9]{1,3}){2})(?!192\.168(?:\.[0-9]{1,3}){2})(?!172\.(?:1[6-9]|2[0-9]|3[01])(?:\.[0-9]{1,3}){2})(?:[1-9][0-9]?|1[0-9][0-9]|2[01][0-9]|22[0-3])(?:\.(?:1?[0-9]{1,2}|2[0-4][0-9]|25[0-5])){2}(?:\.(?:[1-9][0-9]?|1[0-9][0-9]|2[0-4][0-9]|25[0-4]))|(?:(?:(?:[0-9KSa-z\xA1-\uD7FF\uE000-\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])+-?)*(?:[0-9KSa-z\xA1-\uD7FF\uE000-\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])+)(?:\.(?:(?:[0-9KSa-z\xA1-\uD7FF\uE000-\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])+-?)*(?:[0-9KSa-z\xA1-\uD7FF\uE000-\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])+)*(?:\.(?:(?:[KSa-z\xA1-\uD7FF\uE000-\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]){2,})))(?::[0-9]{2,5})?(?:\/(?:[\0-\x08\x0E-\x1F!-\x9F\xA1-\u167F\u1681-\u1FFF\u200B-\u2027\u202A-\u202E\u2030-\u205E\u2060-\u2FFF\u3001-\uD7FF\uE000-\uFEFE\uFF00-\uFFFF]|[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])*)?$/i;
-var UUID = /^(?:urn:uuid:)?[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
-var JSON_POINTER = /^(?:\/(?:[^~/]|~0|~1)*)*$/;
-var JSON_POINTER_URI_FRAGMENT = /^#(?:\/(?:[a-z0-9_\-.!$&'()*+,;:=@]|%[0-9a-f]{2}|~0|~1)*)*$/i;
-var RELATIVE_JSON_POINTER = /^(?:0|[1-9][0-9]*)(?:#|(?:\/(?:[^~/]|~0|~1)*)*)$/;
-
-
-module.exports = formats;
-
-function formats(mode) {
-  mode = mode == 'full' ? 'full' : 'fast';
-  return util.copy(formats[mode]);
+function notFoundError(original, syscall) {
+    return Object.assign(new Error(`${syscall} ${original.command} ENOENT`), {
+        code: 'ENOENT',
+        errno: 'ENOENT',
+        syscall: `${syscall} ${original.command}`,
+        path: original.command,
+        spawnargs: original.args,
+    });
 }
 
+function hookChildProcess(cp, parsed) {
+    if (!isWin) {
+        return;
+    }
 
-formats.fast = {
-  // date: http://tools.ietf.org/html/rfc3339#section-5.6
-  date: /^\d\d\d\d-[0-1]\d-[0-3]\d$/,
-  // date-time: http://tools.ietf.org/html/rfc3339#section-5.6
-  time: /^(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d:\d\d)?$/i,
-  'date-time': /^\d\d\d\d-[0-1]\d-[0-3]\d[t\s](?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d:\d\d)$/i,
-  // uri: https://github.com/mafintosh/is-my-json-valid/blob/master/formats.js
-  uri: /^(?:[a-z][a-z0-9+-.]*:)(?:\/?\/)?[^\s]*$/i,
-  'uri-reference': /^(?:(?:[a-z][a-z0-9+-.]*:)?\/?\/)?(?:[^\\\s#][^\s#]*)?(?:#[^\\\s]*)?$/i,
-  'uri-template': URITEMPLATE,
-  url: URL,
-  // email (sources from jsen validator):
-  // http://stackoverflow.com/questions/201323/using-a-regular-expression-to-validate-an-email-address#answer-8829363
-  // http://www.w3.org/TR/html5/forms.html#valid-e-mail-address (search for 'willful violation')
-  email: /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i,
-  hostname: HOSTNAME,
-  // optimized https://www.safaribooksonline.com/library/view/regular-expressions-cookbook/9780596802837/ch07s16.html
-  ipv4: /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/,
-  // optimized http://stackoverflow.com/questions/53497/regular-expression-that-matches-valid-ipv6-addresses
-  ipv6: /^\s*(?:(?:(?:[0-9a-f]{1,4}:){7}(?:[0-9a-f]{1,4}|:))|(?:(?:[0-9a-f]{1,4}:){6}(?::[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(?:(?:[0-9a-f]{1,4}:){5}(?:(?:(?::[0-9a-f]{1,4}){1,2})|:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(?:(?:[0-9a-f]{1,4}:){4}(?:(?:(?::[0-9a-f]{1,4}){1,3})|(?:(?::[0-9a-f]{1,4})?:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?:(?:[0-9a-f]{1,4}:){3}(?:(?:(?::[0-9a-f]{1,4}){1,4})|(?:(?::[0-9a-f]{1,4}){0,2}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?:(?:[0-9a-f]{1,4}:){2}(?:(?:(?::[0-9a-f]{1,4}){1,5})|(?:(?::[0-9a-f]{1,4}){0,3}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?:(?:[0-9a-f]{1,4}:){1}(?:(?:(?::[0-9a-f]{1,4}){1,6})|(?:(?::[0-9a-f]{1,4}){0,4}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?::(?:(?:(?::[0-9a-f]{1,4}){1,7})|(?:(?::[0-9a-f]{1,4}){0,5}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(?:%.+)?\s*$/i,
-  regex: regex,
-  // uuid: http://tools.ietf.org/html/rfc4122
-  uuid: UUID,
-  // JSON-pointer: https://tools.ietf.org/html/rfc6901
-  // uri fragment: https://tools.ietf.org/html/rfc3986#appendix-A
-  'json-pointer': JSON_POINTER,
-  'json-pointer-uri-fragment': JSON_POINTER_URI_FRAGMENT,
-  // relative JSON-pointer: http://tools.ietf.org/html/draft-luff-relative-json-pointer-00
-  'relative-json-pointer': RELATIVE_JSON_POINTER
+    const originalEmit = cp.emit;
+
+    cp.emit = function (name, arg1) {
+        // If emitting "exit" event and exit code is 1, we need to check if
+        // the command exists and emit an "error" instead
+        // See https://github.com/IndigoUnited/node-cross-spawn/issues/16
+        if (name === 'exit') {
+            const err = verifyENOENT(arg1, parsed, 'spawn');
+
+            if (err) {
+                return originalEmit.call(cp, 'error', err);
+            }
+        }
+
+        return originalEmit.apply(cp, arguments); // eslint-disable-line prefer-rest-params
+    };
+}
+
+function verifyENOENT(status, parsed) {
+    if (isWin && status === 1 && !parsed.file) {
+        return notFoundError(parsed.original, 'spawn');
+    }
+
+    return null;
+}
+
+function verifyENOENTSync(status, parsed) {
+    if (isWin && status === 1 && !parsed.file) {
+        return notFoundError(parsed.original, 'spawnSync');
+    }
+
+    return null;
+}
+
+module.exports = {
+    hookChildProcess,
+    verifyENOENT,
+    verifyENOENTSync,
+    notFoundError,
 };
-
-
-formats.full = {
-  date: date,
-  time: time,
-  'date-time': date_time,
-  uri: uri,
-  'uri-reference': URIREF,
-  'uri-template': URITEMPLATE,
-  url: URL,
-  email: /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i,
-  hostname: hostname,
-  ipv4: /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/,
-  ipv6: /^\s*(?:(?:(?:[0-9a-f]{1,4}:){7}(?:[0-9a-f]{1,4}|:))|(?:(?:[0-9a-f]{1,4}:){6}(?::[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(?:(?:[0-9a-f]{1,4}:){5}(?:(?:(?::[0-9a-f]{1,4}){1,2})|:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(?:(?:[0-9a-f]{1,4}:){4}(?:(?:(?::[0-9a-f]{1,4}){1,3})|(?:(?::[0-9a-f]{1,4})?:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?:(?:[0-9a-f]{1,4}:){3}(?:(?:(?::[0-9a-f]{1,4}){1,4})|(?:(?::[0-9a-f]{1,4}){0,2}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?:(?:[0-9a-f]{1,4}:){2}(?:(?:(?::[0-9a-f]{1,4}){1,5})|(?:(?::[0-9a-f]{1,4}){0,3}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?:(?:[0-9a-f]{1,4}:){1}(?:(?:(?::[0-9a-f]{1,4}){1,6})|(?:(?::[0-9a-f]{1,4}){0,4}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(?::(?:(?:(?::[0-9a-f]{1,4}){1,7})|(?:(?::[0-9a-f]{1,4}){0,5}:(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(?:%.+)?\s*$/i,
-  regex: regex,
-  uuid: UUID,
-  'json-pointer': JSON_POINTER,
-  'json-pointer-uri-fragment': JSON_POINTER_URI_FRAGMENT,
-  'relative-json-pointer': RELATIVE_JSON_POINTER
-};
-
-
-function isLeapYear(year) {
-  // https://tools.ietf.org/html/rfc3339#appendix-C
-  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-}
-
-
-function date(str) {
-  // full-date from http://tools.ietf.org/html/rfc3339#section-5.6
-  var matches = str.match(DATE);
-  if (!matches) return false;
-
-  var year = +matches[1];
-  var month = +matches[2];
-  var day = +matches[3];
-
-  return month >= 1 && month <= 12 && day >= 1 &&
-          day <= (month == 2 && isLeapYear(year) ? 29 : DAYS[month]);
-}
-
-
-function time(str, full) {
-  var matches = str.match(TIME);
-  if (!matches) return false;
-
-  var hour = matches[1];
-  var minute = matches[2];
-  var second = matches[3];
-  var timeZone = matches[5];
-  return ((hour <= 23 && minute <= 59 && second <= 59) ||
-          (hour == 23 && minute == 59 && second == 60)) &&
-         (!full || timeZone);
-}
-
-
-var DATE_TIME_SEPARATOR = /t|\s/i;
-function date_time(str) {
-  // http://tools.ietf.org/html/rfc3339#section-5.6
-  var dateTime = str.split(DATE_TIME_SEPARATOR);
-  return dateTime.length == 2 && date(dateTime[0]) && time(dateTime[1], true);
-}
-
-
-function hostname(str) {
-  // https://tools.ietf.org/html/rfc1034#section-3.5
-  // https://tools.ietf.org/html/rfc1123#section-2
-  return str.length <= 255 && HOSTNAME.test(str);
-}
-
-
-var NOT_URI_FRAGMENT = /\/|:/;
-function uri(str) {
-  // http://jmrware.com/articles/2009/uri_regexp/URI_regex.html + optional protocol + required "."
-  return NOT_URI_FRAGMENT.test(str) && URI.test(str);
-}
-
-
-var Z_ANCHOR = /[^\\]\\Z/;
-function regex(str) {
-  if (Z_ANCHOR.test(str)) return false;
-  try {
-    new RegExp(str);
-    return true;
-  } catch(e) {
-    return false;
-  }
-}
 
 
 /***/ }),
@@ -36097,86 +58100,996 @@ function regex(str) {
 /* 883 */
 /***/ (function(module) {
 
-var isES5 = (function(){
-    "use strict";
-    return this === undefined;
-})();
+/**
+ * lodash (Custom Build) <https://lodash.com/>
+ * Build: `lodash modularize exports="npm" -o ./`
+ * Copyright jQuery Foundation and other contributors <https://jquery.org/>
+ * Released under MIT license <https://lodash.com/license>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ */
 
-if (isES5) {
-    module.exports = {
-        freeze: Object.freeze,
-        defineProperty: Object.defineProperty,
-        getDescriptor: Object.getOwnPropertyDescriptor,
-        keys: Object.keys,
-        names: Object.getOwnPropertyNames,
-        getPrototypeOf: Object.getPrototypeOf,
-        isArray: Array.isArray,
-        isES5: isES5,
-        propertyIsWritable: function(obj, prop) {
-            var descriptor = Object.getOwnPropertyDescriptor(obj, prop);
-            return !!(!descriptor || descriptor.writable || descriptor.set);
-        }
-    };
-} else {
-    var has = {}.hasOwnProperty;
-    var str = {}.toString;
-    var proto = {}.constructor.prototype;
+/** Used as the `TypeError` message for "Functions" methods. */
+var FUNC_ERROR_TEXT = 'Expected a function';
 
-    var ObjectKeys = function (o) {
-        var ret = [];
-        for (var key in o) {
-            if (has.call(o, key)) {
-                ret.push(key);
-            }
-        }
-        return ret;
-    };
+/** Used to stand-in for `undefined` hash values. */
+var HASH_UNDEFINED = '__lodash_hash_undefined__';
 
-    var ObjectGetDescriptor = function(o, key) {
-        return {value: o[key]};
-    };
+/** Used as references for various `Number` constants. */
+var INFINITY = 1 / 0,
+    MAX_SAFE_INTEGER = 9007199254740991;
 
-    var ObjectDefineProperty = function (o, key, desc) {
-        o[key] = desc.value;
-        return o;
-    };
+/** `Object#toString` result references. */
+var funcTag = '[object Function]',
+    genTag = '[object GeneratorFunction]',
+    symbolTag = '[object Symbol]';
 
-    var ObjectFreeze = function (obj) {
-        return obj;
-    };
+/** Used to match property names within property paths. */
+var reIsDeepProp = /\.|\[(?:[^[\]]*|(["'])(?:(?!\1)[^\\]|\\.)*?\1)\]/,
+    reIsPlainProp = /^\w*$/,
+    reLeadingDot = /^\./,
+    rePropName = /[^.[\]]+|\[(?:(-?\d+(?:\.\d+)?)|(["'])((?:(?!\2)[^\\]|\\.)*?)\2)\]|(?=(?:\.|\[\])(?:\.|\[\]|$))/g;
 
-    var ObjectGetPrototypeOf = function (obj) {
-        try {
-            return Object(obj).constructor.prototype;
-        }
-        catch (e) {
-            return proto;
-        }
-    };
+/**
+ * Used to match `RegExp`
+ * [syntax characters](http://ecma-international.org/ecma-262/7.0/#sec-patterns).
+ */
+var reRegExpChar = /[\\^$.*+?()[\]{}|]/g;
 
-    var ArrayIsArray = function (obj) {
-        try {
-            return str.call(obj) === "[object Array]";
-        }
-        catch(e) {
-            return false;
-        }
-    };
+/** Used to match backslashes in property paths. */
+var reEscapeChar = /\\(\\)?/g;
 
-    module.exports = {
-        isArray: ArrayIsArray,
-        keys: ObjectKeys,
-        names: ObjectKeys,
-        defineProperty: ObjectDefineProperty,
-        getDescriptor: ObjectGetDescriptor,
-        freeze: ObjectFreeze,
-        getPrototypeOf: ObjectGetPrototypeOf,
-        isES5: isES5,
-        propertyIsWritable: function() {
-            return true;
-        }
-    };
+/** Used to detect host constructors (Safari). */
+var reIsHostCtor = /^\[object .+?Constructor\]$/;
+
+/** Used to detect unsigned integer values. */
+var reIsUint = /^(?:0|[1-9]\d*)$/;
+
+/** Detect free variable `global` from Node.js. */
+var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
+
+/** Detect free variable `self`. */
+var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
+
+/** Used as a reference to the global object. */
+var root = freeGlobal || freeSelf || Function('return this')();
+
+/**
+ * Gets the value at `key` of `object`.
+ *
+ * @private
+ * @param {Object} [object] The object to query.
+ * @param {string} key The key of the property to get.
+ * @returns {*} Returns the property value.
+ */
+function getValue(object, key) {
+  return object == null ? undefined : object[key];
 }
+
+/**
+ * Checks if `value` is a host object in IE < 9.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a host object, else `false`.
+ */
+function isHostObject(value) {
+  // Many host objects are `Object` objects that can coerce to strings
+  // despite having improperly defined `toString` methods.
+  var result = false;
+  if (value != null && typeof value.toString != 'function') {
+    try {
+      result = !!(value + '');
+    } catch (e) {}
+  }
+  return result;
+}
+
+/** Used for built-in method references. */
+var arrayProto = Array.prototype,
+    funcProto = Function.prototype,
+    objectProto = Object.prototype;
+
+/** Used to detect overreaching core-js shims. */
+var coreJsData = root['__core-js_shared__'];
+
+/** Used to detect methods masquerading as native. */
+var maskSrcKey = (function() {
+  var uid = /[^.]+$/.exec(coreJsData && coreJsData.keys && coreJsData.keys.IE_PROTO || '');
+  return uid ? ('Symbol(src)_1.' + uid) : '';
+}());
+
+/** Used to resolve the decompiled source of functions. */
+var funcToString = funcProto.toString;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/**
+ * Used to resolve the
+ * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
+ * of values.
+ */
+var objectToString = objectProto.toString;
+
+/** Used to detect if a method is native. */
+var reIsNative = RegExp('^' +
+  funcToString.call(hasOwnProperty).replace(reRegExpChar, '\\$&')
+  .replace(/hasOwnProperty|(function).*?(?=\\\()| for .+?(?=\\\])/g, '$1.*?') + '$'
+);
+
+/** Built-in value references. */
+var Symbol = root.Symbol,
+    splice = arrayProto.splice;
+
+/* Built-in method references that are verified to be native. */
+var Map = getNative(root, 'Map'),
+    nativeCreate = getNative(Object, 'create');
+
+/** Used to convert symbols to primitives and strings. */
+var symbolProto = Symbol ? Symbol.prototype : undefined,
+    symbolToString = symbolProto ? symbolProto.toString : undefined;
+
+/**
+ * Creates a hash object.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [entries] The key-value pairs to cache.
+ */
+function Hash(entries) {
+  var index = -1,
+      length = entries ? entries.length : 0;
+
+  this.clear();
+  while (++index < length) {
+    var entry = entries[index];
+    this.set(entry[0], entry[1]);
+  }
+}
+
+/**
+ * Removes all key-value entries from the hash.
+ *
+ * @private
+ * @name clear
+ * @memberOf Hash
+ */
+function hashClear() {
+  this.__data__ = nativeCreate ? nativeCreate(null) : {};
+}
+
+/**
+ * Removes `key` and its value from the hash.
+ *
+ * @private
+ * @name delete
+ * @memberOf Hash
+ * @param {Object} hash The hash to modify.
+ * @param {string} key The key of the value to remove.
+ * @returns {boolean} Returns `true` if the entry was removed, else `false`.
+ */
+function hashDelete(key) {
+  return this.has(key) && delete this.__data__[key];
+}
+
+/**
+ * Gets the hash value for `key`.
+ *
+ * @private
+ * @name get
+ * @memberOf Hash
+ * @param {string} key The key of the value to get.
+ * @returns {*} Returns the entry value.
+ */
+function hashGet(key) {
+  var data = this.__data__;
+  if (nativeCreate) {
+    var result = data[key];
+    return result === HASH_UNDEFINED ? undefined : result;
+  }
+  return hasOwnProperty.call(data, key) ? data[key] : undefined;
+}
+
+/**
+ * Checks if a hash value for `key` exists.
+ *
+ * @private
+ * @name has
+ * @memberOf Hash
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function hashHas(key) {
+  var data = this.__data__;
+  return nativeCreate ? data[key] !== undefined : hasOwnProperty.call(data, key);
+}
+
+/**
+ * Sets the hash `key` to `value`.
+ *
+ * @private
+ * @name set
+ * @memberOf Hash
+ * @param {string} key The key of the value to set.
+ * @param {*} value The value to set.
+ * @returns {Object} Returns the hash instance.
+ */
+function hashSet(key, value) {
+  var data = this.__data__;
+  data[key] = (nativeCreate && value === undefined) ? HASH_UNDEFINED : value;
+  return this;
+}
+
+// Add methods to `Hash`.
+Hash.prototype.clear = hashClear;
+Hash.prototype['delete'] = hashDelete;
+Hash.prototype.get = hashGet;
+Hash.prototype.has = hashHas;
+Hash.prototype.set = hashSet;
+
+/**
+ * Creates an list cache object.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [entries] The key-value pairs to cache.
+ */
+function ListCache(entries) {
+  var index = -1,
+      length = entries ? entries.length : 0;
+
+  this.clear();
+  while (++index < length) {
+    var entry = entries[index];
+    this.set(entry[0], entry[1]);
+  }
+}
+
+/**
+ * Removes all key-value entries from the list cache.
+ *
+ * @private
+ * @name clear
+ * @memberOf ListCache
+ */
+function listCacheClear() {
+  this.__data__ = [];
+}
+
+/**
+ * Removes `key` and its value from the list cache.
+ *
+ * @private
+ * @name delete
+ * @memberOf ListCache
+ * @param {string} key The key of the value to remove.
+ * @returns {boolean} Returns `true` if the entry was removed, else `false`.
+ */
+function listCacheDelete(key) {
+  var data = this.__data__,
+      index = assocIndexOf(data, key);
+
+  if (index < 0) {
+    return false;
+  }
+  var lastIndex = data.length - 1;
+  if (index == lastIndex) {
+    data.pop();
+  } else {
+    splice.call(data, index, 1);
+  }
+  return true;
+}
+
+/**
+ * Gets the list cache value for `key`.
+ *
+ * @private
+ * @name get
+ * @memberOf ListCache
+ * @param {string} key The key of the value to get.
+ * @returns {*} Returns the entry value.
+ */
+function listCacheGet(key) {
+  var data = this.__data__,
+      index = assocIndexOf(data, key);
+
+  return index < 0 ? undefined : data[index][1];
+}
+
+/**
+ * Checks if a list cache value for `key` exists.
+ *
+ * @private
+ * @name has
+ * @memberOf ListCache
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function listCacheHas(key) {
+  return assocIndexOf(this.__data__, key) > -1;
+}
+
+/**
+ * Sets the list cache `key` to `value`.
+ *
+ * @private
+ * @name set
+ * @memberOf ListCache
+ * @param {string} key The key of the value to set.
+ * @param {*} value The value to set.
+ * @returns {Object} Returns the list cache instance.
+ */
+function listCacheSet(key, value) {
+  var data = this.__data__,
+      index = assocIndexOf(data, key);
+
+  if (index < 0) {
+    data.push([key, value]);
+  } else {
+    data[index][1] = value;
+  }
+  return this;
+}
+
+// Add methods to `ListCache`.
+ListCache.prototype.clear = listCacheClear;
+ListCache.prototype['delete'] = listCacheDelete;
+ListCache.prototype.get = listCacheGet;
+ListCache.prototype.has = listCacheHas;
+ListCache.prototype.set = listCacheSet;
+
+/**
+ * Creates a map cache object to store key-value pairs.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [entries] The key-value pairs to cache.
+ */
+function MapCache(entries) {
+  var index = -1,
+      length = entries ? entries.length : 0;
+
+  this.clear();
+  while (++index < length) {
+    var entry = entries[index];
+    this.set(entry[0], entry[1]);
+  }
+}
+
+/**
+ * Removes all key-value entries from the map.
+ *
+ * @private
+ * @name clear
+ * @memberOf MapCache
+ */
+function mapCacheClear() {
+  this.__data__ = {
+    'hash': new Hash,
+    'map': new (Map || ListCache),
+    'string': new Hash
+  };
+}
+
+/**
+ * Removes `key` and its value from the map.
+ *
+ * @private
+ * @name delete
+ * @memberOf MapCache
+ * @param {string} key The key of the value to remove.
+ * @returns {boolean} Returns `true` if the entry was removed, else `false`.
+ */
+function mapCacheDelete(key) {
+  return getMapData(this, key)['delete'](key);
+}
+
+/**
+ * Gets the map value for `key`.
+ *
+ * @private
+ * @name get
+ * @memberOf MapCache
+ * @param {string} key The key of the value to get.
+ * @returns {*} Returns the entry value.
+ */
+function mapCacheGet(key) {
+  return getMapData(this, key).get(key);
+}
+
+/**
+ * Checks if a map value for `key` exists.
+ *
+ * @private
+ * @name has
+ * @memberOf MapCache
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function mapCacheHas(key) {
+  return getMapData(this, key).has(key);
+}
+
+/**
+ * Sets the map `key` to `value`.
+ *
+ * @private
+ * @name set
+ * @memberOf MapCache
+ * @param {string} key The key of the value to set.
+ * @param {*} value The value to set.
+ * @returns {Object} Returns the map cache instance.
+ */
+function mapCacheSet(key, value) {
+  getMapData(this, key).set(key, value);
+  return this;
+}
+
+// Add methods to `MapCache`.
+MapCache.prototype.clear = mapCacheClear;
+MapCache.prototype['delete'] = mapCacheDelete;
+MapCache.prototype.get = mapCacheGet;
+MapCache.prototype.has = mapCacheHas;
+MapCache.prototype.set = mapCacheSet;
+
+/**
+ * Assigns `value` to `key` of `object` if the existing value is not equivalent
+ * using [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
+ * for equality comparisons.
+ *
+ * @private
+ * @param {Object} object The object to modify.
+ * @param {string} key The key of the property to assign.
+ * @param {*} value The value to assign.
+ */
+function assignValue(object, key, value) {
+  var objValue = object[key];
+  if (!(hasOwnProperty.call(object, key) && eq(objValue, value)) ||
+      (value === undefined && !(key in object))) {
+    object[key] = value;
+  }
+}
+
+/**
+ * Gets the index at which the `key` is found in `array` of key-value pairs.
+ *
+ * @private
+ * @param {Array} array The array to inspect.
+ * @param {*} key The key to search for.
+ * @returns {number} Returns the index of the matched value, else `-1`.
+ */
+function assocIndexOf(array, key) {
+  var length = array.length;
+  while (length--) {
+    if (eq(array[length][0], key)) {
+      return length;
+    }
+  }
+  return -1;
+}
+
+/**
+ * The base implementation of `_.isNative` without bad shim checks.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a native function,
+ *  else `false`.
+ */
+function baseIsNative(value) {
+  if (!isObject(value) || isMasked(value)) {
+    return false;
+  }
+  var pattern = (isFunction(value) || isHostObject(value)) ? reIsNative : reIsHostCtor;
+  return pattern.test(toSource(value));
+}
+
+/**
+ * The base implementation of `_.set`.
+ *
+ * @private
+ * @param {Object} object The object to modify.
+ * @param {Array|string} path The path of the property to set.
+ * @param {*} value The value to set.
+ * @param {Function} [customizer] The function to customize path creation.
+ * @returns {Object} Returns `object`.
+ */
+function baseSet(object, path, value, customizer) {
+  if (!isObject(object)) {
+    return object;
+  }
+  path = isKey(path, object) ? [path] : castPath(path);
+
+  var index = -1,
+      length = path.length,
+      lastIndex = length - 1,
+      nested = object;
+
+  while (nested != null && ++index < length) {
+    var key = toKey(path[index]),
+        newValue = value;
+
+    if (index != lastIndex) {
+      var objValue = nested[key];
+      newValue = customizer ? customizer(objValue, key, nested) : undefined;
+      if (newValue === undefined) {
+        newValue = isObject(objValue)
+          ? objValue
+          : (isIndex(path[index + 1]) ? [] : {});
+      }
+    }
+    assignValue(nested, key, newValue);
+    nested = nested[key];
+  }
+  return object;
+}
+
+/**
+ * The base implementation of `_.toString` which doesn't convert nullish
+ * values to empty strings.
+ *
+ * @private
+ * @param {*} value The value to process.
+ * @returns {string} Returns the string.
+ */
+function baseToString(value) {
+  // Exit early for strings to avoid a performance hit in some environments.
+  if (typeof value == 'string') {
+    return value;
+  }
+  if (isSymbol(value)) {
+    return symbolToString ? symbolToString.call(value) : '';
+  }
+  var result = (value + '');
+  return (result == '0' && (1 / value) == -INFINITY) ? '-0' : result;
+}
+
+/**
+ * Casts `value` to a path array if it's not one.
+ *
+ * @private
+ * @param {*} value The value to inspect.
+ * @returns {Array} Returns the cast property path array.
+ */
+function castPath(value) {
+  return isArray(value) ? value : stringToPath(value);
+}
+
+/**
+ * Gets the data for `map`.
+ *
+ * @private
+ * @param {Object} map The map to query.
+ * @param {string} key The reference key.
+ * @returns {*} Returns the map data.
+ */
+function getMapData(map, key) {
+  var data = map.__data__;
+  return isKeyable(key)
+    ? data[typeof key == 'string' ? 'string' : 'hash']
+    : data.map;
+}
+
+/**
+ * Gets the native function at `key` of `object`.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @param {string} key The key of the method to get.
+ * @returns {*} Returns the function if it's native, else `undefined`.
+ */
+function getNative(object, key) {
+  var value = getValue(object, key);
+  return baseIsNative(value) ? value : undefined;
+}
+
+/**
+ * Checks if `value` is a valid array-like index.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @param {number} [length=MAX_SAFE_INTEGER] The upper bounds of a valid index.
+ * @returns {boolean} Returns `true` if `value` is a valid index, else `false`.
+ */
+function isIndex(value, length) {
+  length = length == null ? MAX_SAFE_INTEGER : length;
+  return !!length &&
+    (typeof value == 'number' || reIsUint.test(value)) &&
+    (value > -1 && value % 1 == 0 && value < length);
+}
+
+/**
+ * Checks if `value` is a property name and not a property path.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @param {Object} [object] The object to query keys on.
+ * @returns {boolean} Returns `true` if `value` is a property name, else `false`.
+ */
+function isKey(value, object) {
+  if (isArray(value)) {
+    return false;
+  }
+  var type = typeof value;
+  if (type == 'number' || type == 'symbol' || type == 'boolean' ||
+      value == null || isSymbol(value)) {
+    return true;
+  }
+  return reIsPlainProp.test(value) || !reIsDeepProp.test(value) ||
+    (object != null && value in Object(object));
+}
+
+/**
+ * Checks if `value` is suitable for use as unique object key.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is suitable, else `false`.
+ */
+function isKeyable(value) {
+  var type = typeof value;
+  return (type == 'string' || type == 'number' || type == 'symbol' || type == 'boolean')
+    ? (value !== '__proto__')
+    : (value === null);
+}
+
+/**
+ * Checks if `func` has its source masked.
+ *
+ * @private
+ * @param {Function} func The function to check.
+ * @returns {boolean} Returns `true` if `func` is masked, else `false`.
+ */
+function isMasked(func) {
+  return !!maskSrcKey && (maskSrcKey in func);
+}
+
+/**
+ * Converts `string` to a property path array.
+ *
+ * @private
+ * @param {string} string The string to convert.
+ * @returns {Array} Returns the property path array.
+ */
+var stringToPath = memoize(function(string) {
+  string = toString(string);
+
+  var result = [];
+  if (reLeadingDot.test(string)) {
+    result.push('');
+  }
+  string.replace(rePropName, function(match, number, quote, string) {
+    result.push(quote ? string.replace(reEscapeChar, '$1') : (number || match));
+  });
+  return result;
+});
+
+/**
+ * Converts `value` to a string key if it's not a string or symbol.
+ *
+ * @private
+ * @param {*} value The value to inspect.
+ * @returns {string|symbol} Returns the key.
+ */
+function toKey(value) {
+  if (typeof value == 'string' || isSymbol(value)) {
+    return value;
+  }
+  var result = (value + '');
+  return (result == '0' && (1 / value) == -INFINITY) ? '-0' : result;
+}
+
+/**
+ * Converts `func` to its source code.
+ *
+ * @private
+ * @param {Function} func The function to process.
+ * @returns {string} Returns the source code.
+ */
+function toSource(func) {
+  if (func != null) {
+    try {
+      return funcToString.call(func);
+    } catch (e) {}
+    try {
+      return (func + '');
+    } catch (e) {}
+  }
+  return '';
+}
+
+/**
+ * Creates a function that memoizes the result of `func`. If `resolver` is
+ * provided, it determines the cache key for storing the result based on the
+ * arguments provided to the memoized function. By default, the first argument
+ * provided to the memoized function is used as the map cache key. The `func`
+ * is invoked with the `this` binding of the memoized function.
+ *
+ * **Note:** The cache is exposed as the `cache` property on the memoized
+ * function. Its creation may be customized by replacing the `_.memoize.Cache`
+ * constructor with one whose instances implement the
+ * [`Map`](http://ecma-international.org/ecma-262/7.0/#sec-properties-of-the-map-prototype-object)
+ * method interface of `delete`, `get`, `has`, and `set`.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Function
+ * @param {Function} func The function to have its output memoized.
+ * @param {Function} [resolver] The function to resolve the cache key.
+ * @returns {Function} Returns the new memoized function.
+ * @example
+ *
+ * var object = { 'a': 1, 'b': 2 };
+ * var other = { 'c': 3, 'd': 4 };
+ *
+ * var values = _.memoize(_.values);
+ * values(object);
+ * // => [1, 2]
+ *
+ * values(other);
+ * // => [3, 4]
+ *
+ * object.a = 2;
+ * values(object);
+ * // => [1, 2]
+ *
+ * // Modify the result cache.
+ * values.cache.set(object, ['a', 'b']);
+ * values(object);
+ * // => ['a', 'b']
+ *
+ * // Replace `_.memoize.Cache`.
+ * _.memoize.Cache = WeakMap;
+ */
+function memoize(func, resolver) {
+  if (typeof func != 'function' || (resolver && typeof resolver != 'function')) {
+    throw new TypeError(FUNC_ERROR_TEXT);
+  }
+  var memoized = function() {
+    var args = arguments,
+        key = resolver ? resolver.apply(this, args) : args[0],
+        cache = memoized.cache;
+
+    if (cache.has(key)) {
+      return cache.get(key);
+    }
+    var result = func.apply(this, args);
+    memoized.cache = cache.set(key, result);
+    return result;
+  };
+  memoized.cache = new (memoize.Cache || MapCache);
+  return memoized;
+}
+
+// Assign cache to `_.memoize`.
+memoize.Cache = MapCache;
+
+/**
+ * Performs a
+ * [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
+ * comparison between two values to determine if they are equivalent.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to compare.
+ * @param {*} other The other value to compare.
+ * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
+ * @example
+ *
+ * var object = { 'a': 1 };
+ * var other = { 'a': 1 };
+ *
+ * _.eq(object, object);
+ * // => true
+ *
+ * _.eq(object, other);
+ * // => false
+ *
+ * _.eq('a', 'a');
+ * // => true
+ *
+ * _.eq('a', Object('a'));
+ * // => false
+ *
+ * _.eq(NaN, NaN);
+ * // => true
+ */
+function eq(value, other) {
+  return value === other || (value !== value && other !== other);
+}
+
+/**
+ * Checks if `value` is classified as an `Array` object.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an array, else `false`.
+ * @example
+ *
+ * _.isArray([1, 2, 3]);
+ * // => true
+ *
+ * _.isArray(document.body.children);
+ * // => false
+ *
+ * _.isArray('abc');
+ * // => false
+ *
+ * _.isArray(_.noop);
+ * // => false
+ */
+var isArray = Array.isArray;
+
+/**
+ * Checks if `value` is classified as a `Function` object.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a function, else `false`.
+ * @example
+ *
+ * _.isFunction(_);
+ * // => true
+ *
+ * _.isFunction(/abc/);
+ * // => false
+ */
+function isFunction(value) {
+  // The use of `Object#toString` avoids issues with the `typeof` operator
+  // in Safari 8-9 which returns 'object' for typed array and other constructors.
+  var tag = isObject(value) ? objectToString.call(value) : '';
+  return tag == funcTag || tag == genTag;
+}
+
+/**
+ * Checks if `value` is the
+ * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
+ * of `Object`. (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an object, else `false`.
+ * @example
+ *
+ * _.isObject({});
+ * // => true
+ *
+ * _.isObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isObject(_.noop);
+ * // => true
+ *
+ * _.isObject(null);
+ * // => false
+ */
+function isObject(value) {
+  var type = typeof value;
+  return !!value && (type == 'object' || type == 'function');
+}
+
+/**
+ * Checks if `value` is object-like. A value is object-like if it's not `null`
+ * and has a `typeof` result of "object".
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
+ * @example
+ *
+ * _.isObjectLike({});
+ * // => true
+ *
+ * _.isObjectLike([1, 2, 3]);
+ * // => true
+ *
+ * _.isObjectLike(_.noop);
+ * // => false
+ *
+ * _.isObjectLike(null);
+ * // => false
+ */
+function isObjectLike(value) {
+  return !!value && typeof value == 'object';
+}
+
+/**
+ * Checks if `value` is classified as a `Symbol` primitive or object.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a symbol, else `false`.
+ * @example
+ *
+ * _.isSymbol(Symbol.iterator);
+ * // => true
+ *
+ * _.isSymbol('abc');
+ * // => false
+ */
+function isSymbol(value) {
+  return typeof value == 'symbol' ||
+    (isObjectLike(value) && objectToString.call(value) == symbolTag);
+}
+
+/**
+ * Converts `value` to a string. An empty string is returned for `null`
+ * and `undefined` values. The sign of `-0` is preserved.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to process.
+ * @returns {string} Returns the string.
+ * @example
+ *
+ * _.toString(null);
+ * // => ''
+ *
+ * _.toString(-0);
+ * // => '-0'
+ *
+ * _.toString([1, 2, 3]);
+ * // => '1,2,3'
+ */
+function toString(value) {
+  return value == null ? '' : baseToString(value);
+}
+
+/**
+ * Sets the value at `path` of `object`. If a portion of `path` doesn't exist,
+ * it's created. Arrays are created for missing index properties while objects
+ * are created for all other missing properties. Use `_.setWith` to customize
+ * `path` creation.
+ *
+ * **Note:** This method mutates `object`.
+ *
+ * @static
+ * @memberOf _
+ * @since 3.7.0
+ * @category Object
+ * @param {Object} object The object to modify.
+ * @param {Array|string} path The path of the property to set.
+ * @param {*} value The value to set.
+ * @returns {Object} Returns `object`.
+ * @example
+ *
+ * var object = { 'a': [{ 'b': { 'c': 3 } }] };
+ *
+ * _.set(object, 'a[0].b.c', 4);
+ * console.log(object.a[0].b.c);
+ * // => 4
+ *
+ * _.set(object, ['x', '0', 'y', 'z'], 5);
+ * console.log(object.x[0].y.z);
+ * // => 5
+ */
+function set(object, path, value) {
+  return object == null ? object : baseSet(object, path, value);
+}
+
+module.exports = set;
 
 
 /***/ }),
@@ -36188,7 +59101,7 @@ if (isES5) {
 var crypto = __webpack_require__(417);
 var BigInteger = __webpack_require__(242).BigInteger;
 var ECPointFp = __webpack_require__(729).ECPointFp;
-var Buffer = __webpack_require__(215).Buffer;
+var Buffer = __webpack_require__(481).Buffer;
 exports.ECCurves = __webpack_require__(959);
 
 // zero prepad
@@ -36445,10 +59358,10 @@ module.exports = {
 	toBuffer: toBuffer
 };
 
-var assert = __webpack_require__(489);
+var assert = __webpack_require__(757);
 var SSHBuffer = __webpack_require__(940);
 var crypto = __webpack_require__(417);
-var Buffer = __webpack_require__(215).Buffer;
+var Buffer = __webpack_require__(481).Buffer;
 var algs = __webpack_require__(98);
 var Key = __webpack_require__(852);
 var PrivateKey = __webpack_require__(502);
@@ -37085,7 +59998,98 @@ module.exports = function (object, opts) {
 
 
 /***/ }),
-/* 898 */,
+/* 898 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, '__esModule', { value: true });
+
+var request = __webpack_require__(753);
+var universalUserAgent = __webpack_require__(796);
+
+const VERSION = "4.3.1";
+
+class GraphqlError extends Error {
+  constructor(request, response) {
+    const message = response.data.errors[0].message;
+    super(message);
+    Object.assign(this, response.data);
+    this.name = "GraphqlError";
+    this.request = request; // Maintains proper stack trace (only available on V8)
+
+    /* istanbul ignore next */
+
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, this.constructor);
+    }
+  }
+
+}
+
+const NON_VARIABLE_OPTIONS = ["method", "baseUrl", "url", "headers", "request", "query"];
+function graphql(request, query, options) {
+  options = typeof query === "string" ? options = Object.assign({
+    query
+  }, options) : options = query;
+  const requestOptions = Object.keys(options).reduce((result, key) => {
+    if (NON_VARIABLE_OPTIONS.includes(key)) {
+      result[key] = options[key];
+      return result;
+    }
+
+    if (!result.variables) {
+      result.variables = {};
+    }
+
+    result.variables[key] = options[key];
+    return result;
+  }, {});
+  return request(requestOptions).then(response => {
+    if (response.data.errors) {
+      throw new GraphqlError(requestOptions, {
+        data: response.data
+      });
+    }
+
+    return response.data.data;
+  });
+}
+
+function withDefaults(request$1, newDefaults) {
+  const newRequest = request$1.defaults(newDefaults);
+
+  const newApi = (query, options) => {
+    return graphql(newRequest, query, options);
+  };
+
+  return Object.assign(newApi, {
+    defaults: withDefaults.bind(null, newRequest),
+    endpoint: request.request.endpoint
+  });
+}
+
+const graphql$1 = withDefaults(request.request, {
+  headers: {
+    "user-agent": `octokit-graphql.js/${VERSION} ${universalUserAgent.getUserAgent()}`
+  },
+  method: "POST",
+  url: "/graphql"
+});
+function withCustomRequest(customRequest) {
+  return withDefaults(customRequest, {
+    method: "POST",
+    url: "/graphql"
+  });
+}
+
+exports.graphql = graphql$1;
+exports.withCustomRequest = withCustomRequest;
+//# sourceMappingURL=index.js.map
+
+
+/***/ }),
 /* 899 */
 /***/ (function(module) {
 
@@ -37613,117 +60617,189 @@ aws4.sign = function(request, credentials) {
 /* 909 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
-// Copyright 2012 Joyent, Inc.  All rights reserved.
+"use strict";
 
-var assert = __webpack_require__(489);
-var sshpk = __webpack_require__(650);
-var util = __webpack_require__(669);
+module.exports = function(Promise,
+                          PromiseArray,
+                          apiRejection,
+                          tryConvertToPromise,
+                          INTERNAL,
+                          debug) {
+var util = __webpack_require__(248);
+var tryCatch = util.tryCatch;
 
-var HASH_ALGOS = {
-  'sha1': true,
-  'sha256': true,
-  'sha512': true
+function ReductionPromiseArray(promises, fn, initialValue, _each) {
+    this.constructor$(promises);
+    var context = Promise._getContext();
+    this._fn = util.contextBind(context, fn);
+    if (initialValue !== undefined) {
+        initialValue = Promise.resolve(initialValue);
+        initialValue._attachCancellationCallback(this);
+    }
+    this._initialValue = initialValue;
+    this._currentCancellable = null;
+    if(_each === INTERNAL) {
+        this._eachValues = Array(this._length);
+    } else if (_each === 0) {
+        this._eachValues = null;
+    } else {
+        this._eachValues = undefined;
+    }
+    this._promise._captureStackTrace();
+    this._init$(undefined, -5);
+}
+util.inherits(ReductionPromiseArray, PromiseArray);
+
+ReductionPromiseArray.prototype._gotAccum = function(accum) {
+    if (this._eachValues !== undefined &&
+        this._eachValues !== null &&
+        accum !== INTERNAL) {
+        this._eachValues.push(accum);
+    }
 };
 
-var PK_ALGOS = {
-  'rsa': true,
-  'dsa': true,
-  'ecdsa': true
+ReductionPromiseArray.prototype._eachComplete = function(value) {
+    if (this._eachValues !== null) {
+        this._eachValues.push(value);
+    }
+    return this._eachValues;
 };
 
-function HttpSignatureError(message, caller) {
-  if (Error.captureStackTrace)
-    Error.captureStackTrace(this, caller || HttpSignatureError);
+ReductionPromiseArray.prototype._init = function() {};
 
-  this.message = message;
-  this.name = caller.name;
+ReductionPromiseArray.prototype._resolveEmptyArray = function() {
+    this._resolve(this._eachValues !== undefined ? this._eachValues
+                                                 : this._initialValue);
+};
+
+ReductionPromiseArray.prototype.shouldCopyValues = function () {
+    return false;
+};
+
+ReductionPromiseArray.prototype._resolve = function(value) {
+    this._promise._resolveCallback(value);
+    this._values = null;
+};
+
+ReductionPromiseArray.prototype._resultCancelled = function(sender) {
+    if (sender === this._initialValue) return this._cancel();
+    if (this._isResolved()) return;
+    this._resultCancelled$();
+    if (this._currentCancellable instanceof Promise) {
+        this._currentCancellable.cancel();
+    }
+    if (this._initialValue instanceof Promise) {
+        this._initialValue.cancel();
+    }
+};
+
+ReductionPromiseArray.prototype._iterate = function (values) {
+    this._values = values;
+    var value;
+    var i;
+    var length = values.length;
+    if (this._initialValue !== undefined) {
+        value = this._initialValue;
+        i = 0;
+    } else {
+        value = Promise.resolve(values[0]);
+        i = 1;
+    }
+
+    this._currentCancellable = value;
+
+    for (var j = i; j < length; ++j) {
+        var maybePromise = values[j];
+        if (maybePromise instanceof Promise) {
+            maybePromise.suppressUnhandledRejections();
+        }
+    }
+
+    if (!value.isRejected()) {
+        for (; i < length; ++i) {
+            var ctx = {
+                accum: null,
+                value: values[i],
+                index: i,
+                length: length,
+                array: this
+            };
+
+            value = value._then(gotAccum, undefined, undefined, ctx, undefined);
+
+            if ((i & 127) === 0) {
+                value._setNoAsyncGuarantee();
+            }
+        }
+    }
+
+    if (this._eachValues !== undefined) {
+        value = value
+            ._then(this._eachComplete, undefined, undefined, this, undefined);
+    }
+    value._then(completed, completed, undefined, value, this);
+};
+
+Promise.prototype.reduce = function (fn, initialValue) {
+    return reduce(this, fn, initialValue, null);
+};
+
+Promise.reduce = function (promises, fn, initialValue, _each) {
+    return reduce(promises, fn, initialValue, _each);
+};
+
+function completed(valueOrReason, array) {
+    if (this.isFulfilled()) {
+        array._resolve(valueOrReason);
+    } else {
+        array._reject(valueOrReason);
+    }
 }
-util.inherits(HttpSignatureError, Error);
 
-function InvalidAlgorithmError(message) {
-  HttpSignatureError.call(this, message, InvalidAlgorithmError);
-}
-util.inherits(InvalidAlgorithmError, HttpSignatureError);
-
-function validateAlgorithm(algorithm) {
-  var alg = algorithm.toLowerCase().split('-');
-
-  if (alg.length !== 2) {
-    throw (new InvalidAlgorithmError(alg[0].toUpperCase() + ' is not a ' +
-      'valid algorithm'));
-  }
-
-  if (alg[0] !== 'hmac' && !PK_ALGOS[alg[0]]) {
-    throw (new InvalidAlgorithmError(alg[0].toUpperCase() + ' type keys ' +
-      'are not supported'));
-  }
-
-  if (!HASH_ALGOS[alg[1]]) {
-    throw (new InvalidAlgorithmError(alg[1].toUpperCase() + ' is not a ' +
-      'supported hash algorithm'));
-  }
-
-  return (alg);
+function reduce(promises, fn, initialValue, _each) {
+    if (typeof fn !== "function") {
+        return apiRejection("expecting a function but got " + util.classString(fn));
+    }
+    var array = new ReductionPromiseArray(promises, fn, initialValue, _each);
+    return array.promise();
 }
 
-///--- API
+function gotAccum(accum) {
+    this.accum = accum;
+    this.array._gotAccum(accum);
+    var value = tryConvertToPromise(this.value, this.array._promise);
+    if (value instanceof Promise) {
+        this.array._currentCancellable = value;
+        return value._then(gotValue, undefined, undefined, this, undefined);
+    } else {
+        return gotValue.call(this, value);
+    }
+}
 
-module.exports = {
-
-  HASH_ALGOS: HASH_ALGOS,
-  PK_ALGOS: PK_ALGOS,
-
-  HttpSignatureError: HttpSignatureError,
-  InvalidAlgorithmError: InvalidAlgorithmError,
-
-  validateAlgorithm: validateAlgorithm,
-
-  /**
-   * Converts an OpenSSH public key (rsa only) to a PKCS#8 PEM file.
-   *
-   * The intent of this module is to interoperate with OpenSSL only,
-   * specifically the node crypto module's `verify` method.
-   *
-   * @param {String} key an OpenSSH public key.
-   * @return {String} PEM encoded form of the RSA public key.
-   * @throws {TypeError} on bad input.
-   * @throws {Error} on invalid ssh key formatted data.
-   */
-  sshKeyToPEM: function sshKeyToPEM(key) {
-    assert.string(key, 'ssh_key');
-
-    var k = sshpk.parseKey(key, 'ssh');
-    return (k.toString('pem'));
-  },
-
-
-  /**
-   * Generates an OpenSSH fingerprint from an ssh public key.
-   *
-   * @param {String} key an OpenSSH public key.
-   * @return {String} key fingerprint.
-   * @throws {TypeError} on bad input.
-   * @throws {Error} if what you passed doesn't look like an ssh public key.
-   */
-  fingerprint: function fingerprint(key) {
-    assert.string(key, 'ssh_key');
-
-    var k = sshpk.parseKey(key, 'ssh');
-    return (k.fingerprint('md5').toString('hex'));
-  },
-
-  /**
-   * Converts a PKGCS#8 PEM file to an OpenSSH public key (rsa)
-   *
-   * The reverse of the above function.
-   */
-  pemToRsaSSHKey: function pemToRsaSSHKey(pem, comment) {
-    assert.equal('string', typeof (pem), 'typeof pem');
-
-    var k = sshpk.parseKey(pem, 'pem');
-    k.comment = comment;
-    return (k.toString('ssh'));
-  }
+function gotValue(value) {
+    var array = this.array;
+    var promise = array._promise;
+    var fn = tryCatch(array._fn);
+    promise._pushContext();
+    var ret;
+    if (array._eachValues !== undefined) {
+        ret = fn.call(promise._boundValue(), value, this.index, this.length);
+    } else {
+        ret = fn.call(promise._boundValue(),
+                              this.accum, value, this.index, this.length);
+    }
+    if (ret instanceof Promise) {
+        array._currentCancellable = ret;
+    }
+    var promiseCreated = promise._popContext();
+    debug.checkForgottenReturns(
+        ret,
+        promiseCreated,
+        array._eachValues !== undefined ? "Promise.each" : "Promise.reduce",
+        promise
+    );
+    return ret;
+}
 };
 
 
@@ -37734,13 +60810,801 @@ module.exports = {
 /* 913 */,
 /* 914 */,
 /* 915 */,
-/* 916 */,
+/* 916 */
+/***/ (function(__unusedmodule, exports) {
+
+"use strict";
+
+
+Object.defineProperty(exports, '__esModule', { value: true });
+
+const VERSION = "1.0.0";
+
+/**
+ * @param octokit Octokit instance
+ * @param options Options passed to Octokit constructor
+ */
+
+function requestLog(octokit) {
+  octokit.hook.wrap("request", (request, options) => {
+    octokit.log.debug("request", options);
+    const start = Date.now();
+    const requestOptions = octokit.request.endpoint.parse(options);
+    const path = requestOptions.url.replace(options.baseUrl, "");
+    return request(options).then(response => {
+      octokit.log.info(`${requestOptions.method} ${path} - ${response.status} in ${Date.now() - start}ms`);
+      return response;
+    }).catch(error => {
+      octokit.log.info(`${requestOptions.method} ${path} - ${error.status} in ${Date.now() - start}ms`);
+      throw error;
+    });
+  });
+}
+requestLog.VERSION = VERSION;
+
+exports.requestLog = requestLog;
+//# sourceMappingURL=index.js.map
+
+
+/***/ }),
 /* 917 */,
 /* 918 */,
 /* 919 */
-/***/ (function(module) {
+/***/ (function(module, __unusedexports, __webpack_require__) {
 
-module.exports = {"$id":"entry.json#","$schema":"http://json-schema.org/draft-06/schema#","type":"object","optional":true,"required":["startedDateTime","time","request","response","cache","timings"],"properties":{"pageref":{"type":"string"},"startedDateTime":{"type":"string","format":"date-time","pattern":"^(\\d{4})(-)?(\\d\\d)(-)?(\\d\\d)(T)?(\\d\\d)(:)?(\\d\\d)(:)?(\\d\\d)(\\.\\d+)?(Z|([+-])(\\d\\d)(:)?(\\d\\d))"},"time":{"type":"number","min":0},"request":{"$ref":"request.json#"},"response":{"$ref":"response.json#"},"cache":{"$ref":"cache.json#"},"timings":{"$ref":"timings.json#"},"serverIPAddress":{"type":"string","oneOf":[{"format":"ipv4"},{"format":"ipv6"}]},"connection":{"type":"string"},"comment":{"type":"string"}}};
+// Copyright 2017 Joyent, Inc.
+
+module.exports = {
+	read: read,
+	verify: verify,
+	sign: sign,
+	signAsync: signAsync,
+	write: write
+};
+
+var assert = __webpack_require__(757);
+var asn1 = __webpack_require__(62);
+var Buffer = __webpack_require__(481).Buffer;
+var algs = __webpack_require__(98);
+var utils = __webpack_require__(270);
+var Key = __webpack_require__(852);
+var PrivateKey = __webpack_require__(502);
+var pem = __webpack_require__(268);
+var Identity = __webpack_require__(378);
+var Signature = __webpack_require__(575);
+var Certificate = __webpack_require__(752);
+var pkcs8 = __webpack_require__(707);
+
+/*
+ * This file is based on RFC5280 (X.509).
+ */
+
+/* Helper to read in a single mpint */
+function readMPInt(der, nm) {
+	assert.strictEqual(der.peek(), asn1.Ber.Integer,
+	    nm + ' is not an Integer');
+	return (utils.mpNormalize(der.readString(asn1.Ber.Integer, true)));
+}
+
+function verify(cert, key) {
+	var sig = cert.signatures.x509;
+	assert.object(sig, 'x509 signature');
+
+	var algParts = sig.algo.split('-');
+	if (algParts[0] !== key.type)
+		return (false);
+
+	var blob = sig.cache;
+	if (blob === undefined) {
+		var der = new asn1.BerWriter();
+		writeTBSCert(cert, der);
+		blob = der.buffer;
+	}
+
+	var verifier = key.createVerify(algParts[1]);
+	verifier.write(blob);
+	return (verifier.verify(sig.signature));
+}
+
+function Local(i) {
+	return (asn1.Ber.Context | asn1.Ber.Constructor | i);
+}
+
+function Context(i) {
+	return (asn1.Ber.Context | i);
+}
+
+var SIGN_ALGS = {
+	'rsa-md5': '1.2.840.113549.1.1.4',
+	'rsa-sha1': '1.2.840.113549.1.1.5',
+	'rsa-sha256': '1.2.840.113549.1.1.11',
+	'rsa-sha384': '1.2.840.113549.1.1.12',
+	'rsa-sha512': '1.2.840.113549.1.1.13',
+	'dsa-sha1': '1.2.840.10040.4.3',
+	'dsa-sha256': '2.16.840.1.101.3.4.3.2',
+	'ecdsa-sha1': '1.2.840.10045.4.1',
+	'ecdsa-sha256': '1.2.840.10045.4.3.2',
+	'ecdsa-sha384': '1.2.840.10045.4.3.3',
+	'ecdsa-sha512': '1.2.840.10045.4.3.4',
+	'ed25519-sha512': '1.3.101.112'
+};
+Object.keys(SIGN_ALGS).forEach(function (k) {
+	SIGN_ALGS[SIGN_ALGS[k]] = k;
+});
+SIGN_ALGS['1.3.14.3.2.3'] = 'rsa-md5';
+SIGN_ALGS['1.3.14.3.2.29'] = 'rsa-sha1';
+
+var EXTS = {
+	'issuerKeyId': '2.5.29.35',
+	'altName': '2.5.29.17',
+	'basicConstraints': '2.5.29.19',
+	'keyUsage': '2.5.29.15',
+	'extKeyUsage': '2.5.29.37'
+};
+
+function read(buf, options) {
+	if (typeof (buf) === 'string') {
+		buf = Buffer.from(buf, 'binary');
+	}
+	assert.buffer(buf, 'buf');
+
+	var der = new asn1.BerReader(buf);
+
+	der.readSequence();
+	if (Math.abs(der.length - der.remain) > 1) {
+		throw (new Error('DER sequence does not contain whole byte ' +
+		    'stream'));
+	}
+
+	var tbsStart = der.offset;
+	der.readSequence();
+	var sigOffset = der.offset + der.length;
+	var tbsEnd = sigOffset;
+
+	if (der.peek() === Local(0)) {
+		der.readSequence(Local(0));
+		var version = der.readInt();
+		assert.ok(version <= 3,
+		    'only x.509 versions up to v3 supported');
+	}
+
+	var cert = {};
+	cert.signatures = {};
+	var sig = (cert.signatures.x509 = {});
+	sig.extras = {};
+
+	cert.serial = readMPInt(der, 'serial');
+
+	der.readSequence();
+	var after = der.offset + der.length;
+	var certAlgOid = der.readOID();
+	var certAlg = SIGN_ALGS[certAlgOid];
+	if (certAlg === undefined)
+		throw (new Error('unknown signature algorithm ' + certAlgOid));
+
+	der._offset = after;
+	cert.issuer = Identity.parseAsn1(der);
+
+	der.readSequence();
+	cert.validFrom = readDate(der);
+	cert.validUntil = readDate(der);
+
+	cert.subjects = [Identity.parseAsn1(der)];
+
+	der.readSequence();
+	after = der.offset + der.length;
+	cert.subjectKey = pkcs8.readPkcs8(undefined, 'public', der);
+	der._offset = after;
+
+	/* issuerUniqueID */
+	if (der.peek() === Local(1)) {
+		der.readSequence(Local(1));
+		sig.extras.issuerUniqueID =
+		    buf.slice(der.offset, der.offset + der.length);
+		der._offset += der.length;
+	}
+
+	/* subjectUniqueID */
+	if (der.peek() === Local(2)) {
+		der.readSequence(Local(2));
+		sig.extras.subjectUniqueID =
+		    buf.slice(der.offset, der.offset + der.length);
+		der._offset += der.length;
+	}
+
+	/* extensions */
+	if (der.peek() === Local(3)) {
+		der.readSequence(Local(3));
+		var extEnd = der.offset + der.length;
+		der.readSequence();
+
+		while (der.offset < extEnd)
+			readExtension(cert, buf, der);
+
+		assert.strictEqual(der.offset, extEnd);
+	}
+
+	assert.strictEqual(der.offset, sigOffset);
+
+	der.readSequence();
+	after = der.offset + der.length;
+	var sigAlgOid = der.readOID();
+	var sigAlg = SIGN_ALGS[sigAlgOid];
+	if (sigAlg === undefined)
+		throw (new Error('unknown signature algorithm ' + sigAlgOid));
+	der._offset = after;
+
+	var sigData = der.readString(asn1.Ber.BitString, true);
+	if (sigData[0] === 0)
+		sigData = sigData.slice(1);
+	var algParts = sigAlg.split('-');
+
+	sig.signature = Signature.parse(sigData, algParts[0], 'asn1');
+	sig.signature.hashAlgorithm = algParts[1];
+	sig.algo = sigAlg;
+	sig.cache = buf.slice(tbsStart, tbsEnd);
+
+	return (new Certificate(cert));
+}
+
+function readDate(der) {
+	if (der.peek() === asn1.Ber.UTCTime) {
+		return (utcTimeToDate(der.readString(asn1.Ber.UTCTime)));
+	} else if (der.peek() === asn1.Ber.GeneralizedTime) {
+		return (gTimeToDate(der.readString(asn1.Ber.GeneralizedTime)));
+	} else {
+		throw (new Error('Unsupported date format'));
+	}
+}
+
+function writeDate(der, date) {
+	if (date.getUTCFullYear() >= 2050 || date.getUTCFullYear() < 1950) {
+		der.writeString(dateToGTime(date), asn1.Ber.GeneralizedTime);
+	} else {
+		der.writeString(dateToUTCTime(date), asn1.Ber.UTCTime);
+	}
+}
+
+/* RFC5280, section 4.2.1.6 (GeneralName type) */
+var ALTNAME = {
+	OtherName: Local(0),
+	RFC822Name: Context(1),
+	DNSName: Context(2),
+	X400Address: Local(3),
+	DirectoryName: Local(4),
+	EDIPartyName: Local(5),
+	URI: Context(6),
+	IPAddress: Context(7),
+	OID: Context(8)
+};
+
+/* RFC5280, section 4.2.1.12 (KeyPurposeId) */
+var EXTPURPOSE = {
+	'serverAuth': '1.3.6.1.5.5.7.3.1',
+	'clientAuth': '1.3.6.1.5.5.7.3.2',
+	'codeSigning': '1.3.6.1.5.5.7.3.3',
+
+	/* See https://github.com/joyent/oid-docs/blob/master/root.md */
+	'joyentDocker': '1.3.6.1.4.1.38678.1.4.1',
+	'joyentCmon': '1.3.6.1.4.1.38678.1.4.2'
+};
+var EXTPURPOSE_REV = {};
+Object.keys(EXTPURPOSE).forEach(function (k) {
+	EXTPURPOSE_REV[EXTPURPOSE[k]] = k;
+});
+
+var KEYUSEBITS = [
+	'signature', 'identity', 'keyEncryption',
+	'encryption', 'keyAgreement', 'ca', 'crl'
+];
+
+function readExtension(cert, buf, der) {
+	der.readSequence();
+	var after = der.offset + der.length;
+	var extId = der.readOID();
+	var id;
+	var sig = cert.signatures.x509;
+	if (!sig.extras.exts)
+		sig.extras.exts = [];
+
+	var critical;
+	if (der.peek() === asn1.Ber.Boolean)
+		critical = der.readBoolean();
+
+	switch (extId) {
+	case (EXTS.basicConstraints):
+		der.readSequence(asn1.Ber.OctetString);
+		der.readSequence();
+		var bcEnd = der.offset + der.length;
+		var ca = false;
+		if (der.peek() === asn1.Ber.Boolean)
+			ca = der.readBoolean();
+		if (cert.purposes === undefined)
+			cert.purposes = [];
+		if (ca === true)
+			cert.purposes.push('ca');
+		var bc = { oid: extId, critical: critical };
+		if (der.offset < bcEnd && der.peek() === asn1.Ber.Integer)
+			bc.pathLen = der.readInt();
+		sig.extras.exts.push(bc);
+		break;
+	case (EXTS.extKeyUsage):
+		der.readSequence(asn1.Ber.OctetString);
+		der.readSequence();
+		if (cert.purposes === undefined)
+			cert.purposes = [];
+		var ekEnd = der.offset + der.length;
+		while (der.offset < ekEnd) {
+			var oid = der.readOID();
+			cert.purposes.push(EXTPURPOSE_REV[oid] || oid);
+		}
+		/*
+		 * This is a bit of a hack: in the case where we have a cert
+		 * that's only allowed to do serverAuth or clientAuth (and not
+		 * the other), we want to make sure all our Subjects are of
+		 * the right type. But we already parsed our Subjects and
+		 * decided if they were hosts or users earlier (since it appears
+		 * first in the cert).
+		 *
+		 * So we go through and mutate them into the right kind here if
+		 * it doesn't match. This might not be hugely beneficial, as it
+		 * seems that single-purpose certs are not often seen in the
+		 * wild.
+		 */
+		if (cert.purposes.indexOf('serverAuth') !== -1 &&
+		    cert.purposes.indexOf('clientAuth') === -1) {
+			cert.subjects.forEach(function (ide) {
+				if (ide.type !== 'host') {
+					ide.type = 'host';
+					ide.hostname = ide.uid ||
+					    ide.email ||
+					    ide.components[0].value;
+				}
+			});
+		} else if (cert.purposes.indexOf('clientAuth') !== -1 &&
+		    cert.purposes.indexOf('serverAuth') === -1) {
+			cert.subjects.forEach(function (ide) {
+				if (ide.type !== 'user') {
+					ide.type = 'user';
+					ide.uid = ide.hostname ||
+					    ide.email ||
+					    ide.components[0].value;
+				}
+			});
+		}
+		sig.extras.exts.push({ oid: extId, critical: critical });
+		break;
+	case (EXTS.keyUsage):
+		der.readSequence(asn1.Ber.OctetString);
+		var bits = der.readString(asn1.Ber.BitString, true);
+		var setBits = readBitField(bits, KEYUSEBITS);
+		setBits.forEach(function (bit) {
+			if (cert.purposes === undefined)
+				cert.purposes = [];
+			if (cert.purposes.indexOf(bit) === -1)
+				cert.purposes.push(bit);
+		});
+		sig.extras.exts.push({ oid: extId, critical: critical,
+		    bits: bits });
+		break;
+	case (EXTS.altName):
+		der.readSequence(asn1.Ber.OctetString);
+		der.readSequence();
+		var aeEnd = der.offset + der.length;
+		while (der.offset < aeEnd) {
+			switch (der.peek()) {
+			case ALTNAME.OtherName:
+			case ALTNAME.EDIPartyName:
+				der.readSequence();
+				der._offset += der.length;
+				break;
+			case ALTNAME.OID:
+				der.readOID(ALTNAME.OID);
+				break;
+			case ALTNAME.RFC822Name:
+				/* RFC822 specifies email addresses */
+				var email = der.readString(ALTNAME.RFC822Name);
+				id = Identity.forEmail(email);
+				if (!cert.subjects[0].equals(id))
+					cert.subjects.push(id);
+				break;
+			case ALTNAME.DirectoryName:
+				der.readSequence(ALTNAME.DirectoryName);
+				id = Identity.parseAsn1(der);
+				if (!cert.subjects[0].equals(id))
+					cert.subjects.push(id);
+				break;
+			case ALTNAME.DNSName:
+				var host = der.readString(
+				    ALTNAME.DNSName);
+				id = Identity.forHost(host);
+				if (!cert.subjects[0].equals(id))
+					cert.subjects.push(id);
+				break;
+			default:
+				der.readString(der.peek());
+				break;
+			}
+		}
+		sig.extras.exts.push({ oid: extId, critical: critical });
+		break;
+	default:
+		sig.extras.exts.push({
+			oid: extId,
+			critical: critical,
+			data: der.readString(asn1.Ber.OctetString, true)
+		});
+		break;
+	}
+
+	der._offset = after;
+}
+
+var UTCTIME_RE =
+    /^([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})?Z$/;
+function utcTimeToDate(t) {
+	var m = t.match(UTCTIME_RE);
+	assert.ok(m, 'timestamps must be in UTC');
+	var d = new Date();
+
+	var thisYear = d.getUTCFullYear();
+	var century = Math.floor(thisYear / 100) * 100;
+
+	var year = parseInt(m[1], 10);
+	if (thisYear % 100 < 50 && year >= 60)
+		year += (century - 1);
+	else
+		year += century;
+	d.setUTCFullYear(year, parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+	d.setUTCHours(parseInt(m[4], 10), parseInt(m[5], 10));
+	if (m[6] && m[6].length > 0)
+		d.setUTCSeconds(parseInt(m[6], 10));
+	return (d);
+}
+
+var GTIME_RE =
+    /^([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})?Z$/;
+function gTimeToDate(t) {
+	var m = t.match(GTIME_RE);
+	assert.ok(m);
+	var d = new Date();
+
+	d.setUTCFullYear(parseInt(m[1], 10), parseInt(m[2], 10) - 1,
+	    parseInt(m[3], 10));
+	d.setUTCHours(parseInt(m[4], 10), parseInt(m[5], 10));
+	if (m[6] && m[6].length > 0)
+		d.setUTCSeconds(parseInt(m[6], 10));
+	return (d);
+}
+
+function zeroPad(n, m) {
+	if (m === undefined)
+		m = 2;
+	var s = '' + n;
+	while (s.length < m)
+		s = '0' + s;
+	return (s);
+}
+
+function dateToUTCTime(d) {
+	var s = '';
+	s += zeroPad(d.getUTCFullYear() % 100);
+	s += zeroPad(d.getUTCMonth() + 1);
+	s += zeroPad(d.getUTCDate());
+	s += zeroPad(d.getUTCHours());
+	s += zeroPad(d.getUTCMinutes());
+	s += zeroPad(d.getUTCSeconds());
+	s += 'Z';
+	return (s);
+}
+
+function dateToGTime(d) {
+	var s = '';
+	s += zeroPad(d.getUTCFullYear(), 4);
+	s += zeroPad(d.getUTCMonth() + 1);
+	s += zeroPad(d.getUTCDate());
+	s += zeroPad(d.getUTCHours());
+	s += zeroPad(d.getUTCMinutes());
+	s += zeroPad(d.getUTCSeconds());
+	s += 'Z';
+	return (s);
+}
+
+function sign(cert, key) {
+	if (cert.signatures.x509 === undefined)
+		cert.signatures.x509 = {};
+	var sig = cert.signatures.x509;
+
+	sig.algo = key.type + '-' + key.defaultHashAlgorithm();
+	if (SIGN_ALGS[sig.algo] === undefined)
+		return (false);
+
+	var der = new asn1.BerWriter();
+	writeTBSCert(cert, der);
+	var blob = der.buffer;
+	sig.cache = blob;
+
+	var signer = key.createSign();
+	signer.write(blob);
+	cert.signatures.x509.signature = signer.sign();
+
+	return (true);
+}
+
+function signAsync(cert, signer, done) {
+	if (cert.signatures.x509 === undefined)
+		cert.signatures.x509 = {};
+	var sig = cert.signatures.x509;
+
+	var der = new asn1.BerWriter();
+	writeTBSCert(cert, der);
+	var blob = der.buffer;
+	sig.cache = blob;
+
+	signer(blob, function (err, signature) {
+		if (err) {
+			done(err);
+			return;
+		}
+		sig.algo = signature.type + '-' + signature.hashAlgorithm;
+		if (SIGN_ALGS[sig.algo] === undefined) {
+			done(new Error('Invalid signing algorithm "' +
+			    sig.algo + '"'));
+			return;
+		}
+		sig.signature = signature;
+		done();
+	});
+}
+
+function write(cert, options) {
+	var sig = cert.signatures.x509;
+	assert.object(sig, 'x509 signature');
+
+	var der = new asn1.BerWriter();
+	der.startSequence();
+	if (sig.cache) {
+		der._ensure(sig.cache.length);
+		sig.cache.copy(der._buf, der._offset);
+		der._offset += sig.cache.length;
+	} else {
+		writeTBSCert(cert, der);
+	}
+
+	der.startSequence();
+	der.writeOID(SIGN_ALGS[sig.algo]);
+	if (sig.algo.match(/^rsa-/))
+		der.writeNull();
+	der.endSequence();
+
+	var sigData = sig.signature.toBuffer('asn1');
+	var data = Buffer.alloc(sigData.length + 1);
+	data[0] = 0;
+	sigData.copy(data, 1);
+	der.writeBuffer(data, asn1.Ber.BitString);
+	der.endSequence();
+
+	return (der.buffer);
+}
+
+function writeTBSCert(cert, der) {
+	var sig = cert.signatures.x509;
+	assert.object(sig, 'x509 signature');
+
+	der.startSequence();
+
+	der.startSequence(Local(0));
+	der.writeInt(2);
+	der.endSequence();
+
+	der.writeBuffer(utils.mpNormalize(cert.serial), asn1.Ber.Integer);
+
+	der.startSequence();
+	der.writeOID(SIGN_ALGS[sig.algo]);
+	if (sig.algo.match(/^rsa-/))
+		der.writeNull();
+	der.endSequence();
+
+	cert.issuer.toAsn1(der);
+
+	der.startSequence();
+	writeDate(der, cert.validFrom);
+	writeDate(der, cert.validUntil);
+	der.endSequence();
+
+	var subject = cert.subjects[0];
+	var altNames = cert.subjects.slice(1);
+	subject.toAsn1(der);
+
+	pkcs8.writePkcs8(der, cert.subjectKey);
+
+	if (sig.extras && sig.extras.issuerUniqueID) {
+		der.writeBuffer(sig.extras.issuerUniqueID, Local(1));
+	}
+
+	if (sig.extras && sig.extras.subjectUniqueID) {
+		der.writeBuffer(sig.extras.subjectUniqueID, Local(2));
+	}
+
+	if (altNames.length > 0 || subject.type === 'host' ||
+	    (cert.purposes !== undefined && cert.purposes.length > 0) ||
+	    (sig.extras && sig.extras.exts)) {
+		der.startSequence(Local(3));
+		der.startSequence();
+
+		var exts = [];
+		if (cert.purposes !== undefined && cert.purposes.length > 0) {
+			exts.push({
+				oid: EXTS.basicConstraints,
+				critical: true
+			});
+			exts.push({
+				oid: EXTS.keyUsage,
+				critical: true
+			});
+			exts.push({
+				oid: EXTS.extKeyUsage,
+				critical: true
+			});
+		}
+		exts.push({ oid: EXTS.altName });
+		if (sig.extras && sig.extras.exts)
+			exts = sig.extras.exts;
+
+		for (var i = 0; i < exts.length; ++i) {
+			der.startSequence();
+			der.writeOID(exts[i].oid);
+
+			if (exts[i].critical !== undefined)
+				der.writeBoolean(exts[i].critical);
+
+			if (exts[i].oid === EXTS.altName) {
+				der.startSequence(asn1.Ber.OctetString);
+				der.startSequence();
+				if (subject.type === 'host') {
+					der.writeString(subject.hostname,
+					    Context(2));
+				}
+				for (var j = 0; j < altNames.length; ++j) {
+					if (altNames[j].type === 'host') {
+						der.writeString(
+						    altNames[j].hostname,
+						    ALTNAME.DNSName);
+					} else if (altNames[j].type ===
+					    'email') {
+						der.writeString(
+						    altNames[j].email,
+						    ALTNAME.RFC822Name);
+					} else {
+						/*
+						 * Encode anything else as a
+						 * DN style name for now.
+						 */
+						der.startSequence(
+						    ALTNAME.DirectoryName);
+						altNames[j].toAsn1(der);
+						der.endSequence();
+					}
+				}
+				der.endSequence();
+				der.endSequence();
+			} else if (exts[i].oid === EXTS.basicConstraints) {
+				der.startSequence(asn1.Ber.OctetString);
+				der.startSequence();
+				var ca = (cert.purposes.indexOf('ca') !== -1);
+				var pathLen = exts[i].pathLen;
+				der.writeBoolean(ca);
+				if (pathLen !== undefined)
+					der.writeInt(pathLen);
+				der.endSequence();
+				der.endSequence();
+			} else if (exts[i].oid === EXTS.extKeyUsage) {
+				der.startSequence(asn1.Ber.OctetString);
+				der.startSequence();
+				cert.purposes.forEach(function (purpose) {
+					if (purpose === 'ca')
+						return;
+					if (KEYUSEBITS.indexOf(purpose) !== -1)
+						return;
+					var oid = purpose;
+					if (EXTPURPOSE[purpose] !== undefined)
+						oid = EXTPURPOSE[purpose];
+					der.writeOID(oid);
+				});
+				der.endSequence();
+				der.endSequence();
+			} else if (exts[i].oid === EXTS.keyUsage) {
+				der.startSequence(asn1.Ber.OctetString);
+				/*
+				 * If we parsed this certificate from a byte
+				 * stream (i.e. we didn't generate it in sshpk)
+				 * then we'll have a ".bits" property on the
+				 * ext with the original raw byte contents.
+				 *
+				 * If we have this, use it here instead of
+				 * regenerating it. This guarantees we output
+				 * the same data we parsed, so signatures still
+				 * validate.
+				 */
+				if (exts[i].bits !== undefined) {
+					der.writeBuffer(exts[i].bits,
+					    asn1.Ber.BitString);
+				} else {
+					var bits = writeBitField(cert.purposes,
+					    KEYUSEBITS);
+					der.writeBuffer(bits,
+					    asn1.Ber.BitString);
+				}
+				der.endSequence();
+			} else {
+				der.writeBuffer(exts[i].data,
+				    asn1.Ber.OctetString);
+			}
+
+			der.endSequence();
+		}
+
+		der.endSequence();
+		der.endSequence();
+	}
+
+	der.endSequence();
+}
+
+/*
+ * Reads an ASN.1 BER bitfield out of the Buffer produced by doing
+ * `BerReader#readString(asn1.Ber.BitString)`. That function gives us the raw
+ * contents of the BitString tag, which is a count of unused bits followed by
+ * the bits as a right-padded byte string.
+ *
+ * `bits` is the Buffer, `bitIndex` should contain an array of string names
+ * for the bits in the string, ordered starting with bit #0 in the ASN.1 spec.
+ *
+ * Returns an array of Strings, the names of the bits that were set to 1.
+ */
+function readBitField(bits, bitIndex) {
+	var bitLen = 8 * (bits.length - 1) - bits[0];
+	var setBits = {};
+	for (var i = 0; i < bitLen; ++i) {
+		var byteN = 1 + Math.floor(i / 8);
+		var bit = 7 - (i % 8);
+		var mask = 1 << bit;
+		var bitVal = ((bits[byteN] & mask) !== 0);
+		var name = bitIndex[i];
+		if (bitVal && typeof (name) === 'string') {
+			setBits[name] = true;
+		}
+	}
+	return (Object.keys(setBits));
+}
+
+/*
+ * `setBits` is an array of strings, containing the names for each bit that
+ * sould be set to 1. `bitIndex` is same as in `readBitField()`.
+ *
+ * Returns a Buffer, ready to be written out with `BerWriter#writeString()`.
+ */
+function writeBitField(setBits, bitIndex) {
+	var bitLen = bitIndex.length;
+	var blen = Math.ceil(bitLen / 8);
+	var unused = blen * 8 - bitLen;
+	var bits = Buffer.alloc(1 + blen); // zero-filled
+	bits[0] = unused;
+	for (var i = 0; i < bitLen; ++i) {
+		var byteN = 1 + Math.floor(i / 8);
+		var bit = 7 - (i % 8);
+		var mask = 1 << bit;
+		var name = bitIndex[i];
+		if (name === undefined)
+			continue;
+		var bitVal = (setBits.indexOf(name) !== -1);
+		if (bitVal) {
+			bits[byteN] |= mask;
+		}
+	}
+	return (bits);
+}
+
 
 /***/ }),
 /* 920 */,
@@ -37856,7 +61720,747 @@ return Context;
 /***/ }),
 /* 924 */,
 /* 925 */,
-/* 926 */,
+/* 926 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+/*
+ * lib/jsprim.js: utilities for primitive JavaScript types
+ */
+
+var mod_assert = __webpack_require__(757);
+var mod_util = __webpack_require__(669);
+
+var mod_extsprintf = __webpack_require__(432);
+var mod_verror = __webpack_require__(956);
+var mod_jsonschema = __webpack_require__(703);
+
+/*
+ * Public interface
+ */
+exports.deepCopy = deepCopy;
+exports.deepEqual = deepEqual;
+exports.isEmpty = isEmpty;
+exports.hasKey = hasKey;
+exports.forEachKey = forEachKey;
+exports.pluck = pluck;
+exports.flattenObject = flattenObject;
+exports.flattenIter = flattenIter;
+exports.validateJsonObject = validateJsonObjectJS;
+exports.validateJsonObjectJS = validateJsonObjectJS;
+exports.randElt = randElt;
+exports.extraProperties = extraProperties;
+exports.mergeObjects = mergeObjects;
+
+exports.startsWith = startsWith;
+exports.endsWith = endsWith;
+
+exports.parseInteger = parseInteger;
+
+exports.iso8601 = iso8601;
+exports.rfc1123 = rfc1123;
+exports.parseDateTime = parseDateTime;
+
+exports.hrtimediff = hrtimeDiff;
+exports.hrtimeDiff = hrtimeDiff;
+exports.hrtimeAccum = hrtimeAccum;
+exports.hrtimeAdd = hrtimeAdd;
+exports.hrtimeNanosec = hrtimeNanosec;
+exports.hrtimeMicrosec = hrtimeMicrosec;
+exports.hrtimeMillisec = hrtimeMillisec;
+
+
+/*
+ * Deep copy an acyclic *basic* Javascript object.  This only handles basic
+ * scalars (strings, numbers, booleans) and arbitrarily deep arrays and objects
+ * containing these.  This does *not* handle instances of other classes.
+ */
+function deepCopy(obj)
+{
+	var ret, key;
+	var marker = '__deepCopy';
+
+	if (obj && obj[marker])
+		throw (new Error('attempted deep copy of cyclic object'));
+
+	if (obj && obj.constructor == Object) {
+		ret = {};
+		obj[marker] = true;
+
+		for (key in obj) {
+			if (key == marker)
+				continue;
+
+			ret[key] = deepCopy(obj[key]);
+		}
+
+		delete (obj[marker]);
+		return (ret);
+	}
+
+	if (obj && obj.constructor == Array) {
+		ret = [];
+		obj[marker] = true;
+
+		for (key = 0; key < obj.length; key++)
+			ret.push(deepCopy(obj[key]));
+
+		delete (obj[marker]);
+		return (ret);
+	}
+
+	/*
+	 * It must be a primitive type -- just return it.
+	 */
+	return (obj);
+}
+
+function deepEqual(obj1, obj2)
+{
+	if (typeof (obj1) != typeof (obj2))
+		return (false);
+
+	if (obj1 === null || obj2 === null || typeof (obj1) != 'object')
+		return (obj1 === obj2);
+
+	if (obj1.constructor != obj2.constructor)
+		return (false);
+
+	var k;
+	for (k in obj1) {
+		if (!obj2.hasOwnProperty(k))
+			return (false);
+
+		if (!deepEqual(obj1[k], obj2[k]))
+			return (false);
+	}
+
+	for (k in obj2) {
+		if (!obj1.hasOwnProperty(k))
+			return (false);
+	}
+
+	return (true);
+}
+
+function isEmpty(obj)
+{
+	var key;
+	for (key in obj)
+		return (false);
+	return (true);
+}
+
+function hasKey(obj, key)
+{
+	mod_assert.equal(typeof (key), 'string');
+	return (Object.prototype.hasOwnProperty.call(obj, key));
+}
+
+function forEachKey(obj, callback)
+{
+	for (var key in obj) {
+		if (hasKey(obj, key)) {
+			callback(key, obj[key]);
+		}
+	}
+}
+
+function pluck(obj, key)
+{
+	mod_assert.equal(typeof (key), 'string');
+	return (pluckv(obj, key));
+}
+
+function pluckv(obj, key)
+{
+	if (obj === null || typeof (obj) !== 'object')
+		return (undefined);
+
+	if (obj.hasOwnProperty(key))
+		return (obj[key]);
+
+	var i = key.indexOf('.');
+	if (i == -1)
+		return (undefined);
+
+	var key1 = key.substr(0, i);
+	if (!obj.hasOwnProperty(key1))
+		return (undefined);
+
+	return (pluckv(obj[key1], key.substr(i + 1)));
+}
+
+/*
+ * Invoke callback(row) for each entry in the array that would be returned by
+ * flattenObject(data, depth).  This is just like flattenObject(data,
+ * depth).forEach(callback), except that the intermediate array is never
+ * created.
+ */
+function flattenIter(data, depth, callback)
+{
+	doFlattenIter(data, depth, [], callback);
+}
+
+function doFlattenIter(data, depth, accum, callback)
+{
+	var each;
+	var key;
+
+	if (depth === 0) {
+		each = accum.slice(0);
+		each.push(data);
+		callback(each);
+		return;
+	}
+
+	mod_assert.ok(data !== null);
+	mod_assert.equal(typeof (data), 'object');
+	mod_assert.equal(typeof (depth), 'number');
+	mod_assert.ok(depth >= 0);
+
+	for (key in data) {
+		each = accum.slice(0);
+		each.push(key);
+		doFlattenIter(data[key], depth - 1, each, callback);
+	}
+}
+
+function flattenObject(data, depth)
+{
+	if (depth === 0)
+		return ([ data ]);
+
+	mod_assert.ok(data !== null);
+	mod_assert.equal(typeof (data), 'object');
+	mod_assert.equal(typeof (depth), 'number');
+	mod_assert.ok(depth >= 0);
+
+	var rv = [];
+	var key;
+
+	for (key in data) {
+		flattenObject(data[key], depth - 1).forEach(function (p) {
+			rv.push([ key ].concat(p));
+		});
+	}
+
+	return (rv);
+}
+
+function startsWith(str, prefix)
+{
+	return (str.substr(0, prefix.length) == prefix);
+}
+
+function endsWith(str, suffix)
+{
+	return (str.substr(
+	    str.length - suffix.length, suffix.length) == suffix);
+}
+
+function iso8601(d)
+{
+	if (typeof (d) == 'number')
+		d = new Date(d);
+	mod_assert.ok(d.constructor === Date);
+	return (mod_extsprintf.sprintf('%4d-%02d-%02dT%02d:%02d:%02d.%03dZ',
+	    d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(),
+	    d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(),
+	    d.getUTCMilliseconds()));
+}
+
+var RFC1123_MONTHS = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+var RFC1123_DAYS = [
+    'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function rfc1123(date) {
+	return (mod_extsprintf.sprintf('%s, %02d %s %04d %02d:%02d:%02d GMT',
+	    RFC1123_DAYS[date.getUTCDay()], date.getUTCDate(),
+	    RFC1123_MONTHS[date.getUTCMonth()], date.getUTCFullYear(),
+	    date.getUTCHours(), date.getUTCMinutes(),
+	    date.getUTCSeconds()));
+}
+
+/*
+ * Parses a date expressed as a string, as either a number of milliseconds since
+ * the epoch or any string format that Date accepts, giving preference to the
+ * former where these two sets overlap (e.g., small numbers).
+ */
+function parseDateTime(str)
+{
+	/*
+	 * This is irritatingly implicit, but significantly more concise than
+	 * alternatives.  The "+str" will convert a string containing only a
+	 * number directly to a Number, or NaN for other strings.  Thus, if the
+	 * conversion succeeds, we use it (this is the milliseconds-since-epoch
+	 * case).  Otherwise, we pass the string directly to the Date
+	 * constructor to parse.
+	 */
+	var numeric = +str;
+	if (!isNaN(numeric)) {
+		return (new Date(numeric));
+	} else {
+		return (new Date(str));
+	}
+}
+
+
+/*
+ * Number.*_SAFE_INTEGER isn't present before node v0.12, so we hardcode
+ * the ES6 definitions here, while allowing for them to someday be higher.
+ */
+var MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER || 9007199254740991;
+var MIN_SAFE_INTEGER = Number.MIN_SAFE_INTEGER || -9007199254740991;
+
+
+/*
+ * Default options for parseInteger().
+ */
+var PI_DEFAULTS = {
+	base: 10,
+	allowSign: true,
+	allowPrefix: false,
+	allowTrailing: false,
+	allowImprecise: false,
+	trimWhitespace: false,
+	leadingZeroIsOctal: false
+};
+
+var CP_0 = 0x30;
+var CP_9 = 0x39;
+
+var CP_A = 0x41;
+var CP_B = 0x42;
+var CP_O = 0x4f;
+var CP_T = 0x54;
+var CP_X = 0x58;
+var CP_Z = 0x5a;
+
+var CP_a = 0x61;
+var CP_b = 0x62;
+var CP_o = 0x6f;
+var CP_t = 0x74;
+var CP_x = 0x78;
+var CP_z = 0x7a;
+
+var PI_CONV_DEC = 0x30;
+var PI_CONV_UC = 0x37;
+var PI_CONV_LC = 0x57;
+
+
+/*
+ * A stricter version of parseInt() that provides options for changing what
+ * is an acceptable string (for example, disallowing trailing characters).
+ */
+function parseInteger(str, uopts)
+{
+	mod_assert.string(str, 'str');
+	mod_assert.optionalObject(uopts, 'options');
+
+	var baseOverride = false;
+	var options = PI_DEFAULTS;
+
+	if (uopts) {
+		baseOverride = hasKey(uopts, 'base');
+		options = mergeObjects(options, uopts);
+		mod_assert.number(options.base, 'options.base');
+		mod_assert.ok(options.base >= 2, 'options.base >= 2');
+		mod_assert.ok(options.base <= 36, 'options.base <= 36');
+		mod_assert.bool(options.allowSign, 'options.allowSign');
+		mod_assert.bool(options.allowPrefix, 'options.allowPrefix');
+		mod_assert.bool(options.allowTrailing,
+		    'options.allowTrailing');
+		mod_assert.bool(options.allowImprecise,
+		    'options.allowImprecise');
+		mod_assert.bool(options.trimWhitespace,
+		    'options.trimWhitespace');
+		mod_assert.bool(options.leadingZeroIsOctal,
+		    'options.leadingZeroIsOctal');
+
+		if (options.leadingZeroIsOctal) {
+			mod_assert.ok(!baseOverride,
+			    '"base" and "leadingZeroIsOctal" are ' +
+			    'mutually exclusive');
+		}
+	}
+
+	var c;
+	var pbase = -1;
+	var base = options.base;
+	var start;
+	var mult = 1;
+	var value = 0;
+	var idx = 0;
+	var len = str.length;
+
+	/* Trim any whitespace on the left side. */
+	if (options.trimWhitespace) {
+		while (idx < len && isSpace(str.charCodeAt(idx))) {
+			++idx;
+		}
+	}
+
+	/* Check the number for a leading sign. */
+	if (options.allowSign) {
+		if (str[idx] === '-') {
+			idx += 1;
+			mult = -1;
+		} else if (str[idx] === '+') {
+			idx += 1;
+		}
+	}
+
+	/* Parse the base-indicating prefix if there is one. */
+	if (str[idx] === '0') {
+		if (options.allowPrefix) {
+			pbase = prefixToBase(str.charCodeAt(idx + 1));
+			if (pbase !== -1 && (!baseOverride || pbase === base)) {
+				base = pbase;
+				idx += 2;
+			}
+		}
+
+		if (pbase === -1 && options.leadingZeroIsOctal) {
+			base = 8;
+		}
+	}
+
+	/* Parse the actual digits. */
+	for (start = idx; idx < len; ++idx) {
+		c = translateDigit(str.charCodeAt(idx));
+		if (c !== -1 && c < base) {
+			value *= base;
+			value += c;
+		} else {
+			break;
+		}
+	}
+
+	/* If we didn't parse any digits, we have an invalid number. */
+	if (start === idx) {
+		return (new Error('invalid number: ' + JSON.stringify(str)));
+	}
+
+	/* Trim any whitespace on the right side. */
+	if (options.trimWhitespace) {
+		while (idx < len && isSpace(str.charCodeAt(idx))) {
+			++idx;
+		}
+	}
+
+	/* Check for trailing characters. */
+	if (idx < len && !options.allowTrailing) {
+		return (new Error('trailing characters after number: ' +
+		    JSON.stringify(str.slice(idx))));
+	}
+
+	/* If our value is 0, we return now, to avoid returning -0. */
+	if (value === 0) {
+		return (0);
+	}
+
+	/* Calculate our final value. */
+	var result = value * mult;
+
+	/*
+	 * If the string represents a value that cannot be precisely represented
+	 * by JavaScript, then we want to check that:
+	 *
+	 * - We never increased the value past MAX_SAFE_INTEGER
+	 * - We don't make the result negative and below MIN_SAFE_INTEGER
+	 *
+	 * Because we only ever increment the value during parsing, there's no
+	 * chance of moving past MAX_SAFE_INTEGER and then dropping below it
+	 * again, losing precision in the process. This means that we only need
+	 * to do our checks here, at the end.
+	 */
+	if (!options.allowImprecise &&
+	    (value > MAX_SAFE_INTEGER || result < MIN_SAFE_INTEGER)) {
+		return (new Error('number is outside of the supported range: ' +
+		    JSON.stringify(str.slice(start, idx))));
+	}
+
+	return (result);
+}
+
+
+/*
+ * Interpret a character code as a base-36 digit.
+ */
+function translateDigit(d)
+{
+	if (d >= CP_0 && d <= CP_9) {
+		/* '0' to '9' -> 0 to 9 */
+		return (d - PI_CONV_DEC);
+	} else if (d >= CP_A && d <= CP_Z) {
+		/* 'A' - 'Z' -> 10 to 35 */
+		return (d - PI_CONV_UC);
+	} else if (d >= CP_a && d <= CP_z) {
+		/* 'a' - 'z' -> 10 to 35 */
+		return (d - PI_CONV_LC);
+	} else {
+		/* Invalid character code */
+		return (-1);
+	}
+}
+
+
+/*
+ * Test if a value matches the ECMAScript definition of trimmable whitespace.
+ */
+function isSpace(c)
+{
+	return (c === 0x20) ||
+	    (c >= 0x0009 && c <= 0x000d) ||
+	    (c === 0x00a0) ||
+	    (c === 0x1680) ||
+	    (c === 0x180e) ||
+	    (c >= 0x2000 && c <= 0x200a) ||
+	    (c === 0x2028) ||
+	    (c === 0x2029) ||
+	    (c === 0x202f) ||
+	    (c === 0x205f) ||
+	    (c === 0x3000) ||
+	    (c === 0xfeff);
+}
+
+
+/*
+ * Determine which base a character indicates (e.g., 'x' indicates hex).
+ */
+function prefixToBase(c)
+{
+	if (c === CP_b || c === CP_B) {
+		/* 0b/0B (binary) */
+		return (2);
+	} else if (c === CP_o || c === CP_O) {
+		/* 0o/0O (octal) */
+		return (8);
+	} else if (c === CP_t || c === CP_T) {
+		/* 0t/0T (decimal) */
+		return (10);
+	} else if (c === CP_x || c === CP_X) {
+		/* 0x/0X (hexadecimal) */
+		return (16);
+	} else {
+		/* Not a meaningful character */
+		return (-1);
+	}
+}
+
+
+function validateJsonObjectJS(schema, input)
+{
+	var report = mod_jsonschema.validate(input, schema);
+
+	if (report.errors.length === 0)
+		return (null);
+
+	/* Currently, we only do anything useful with the first error. */
+	var error = report.errors[0];
+
+	/* The failed property is given by a URI with an irrelevant prefix. */
+	var propname = error['property'];
+	var reason = error['message'].toLowerCase();
+	var i, j;
+
+	/*
+	 * There's at least one case where the property error message is
+	 * confusing at best.  We work around this here.
+	 */
+	if ((i = reason.indexOf('the property ')) != -1 &&
+	    (j = reason.indexOf(' is not defined in the schema and the ' +
+	    'schema does not allow additional properties')) != -1) {
+		i += 'the property '.length;
+		if (propname === '')
+			propname = reason.substr(i, j - i);
+		else
+			propname = propname + '.' + reason.substr(i, j - i);
+
+		reason = 'unsupported property';
+	}
+
+	var rv = new mod_verror.VError('property "%s": %s', propname, reason);
+	rv.jsv_details = error;
+	return (rv);
+}
+
+function randElt(arr)
+{
+	mod_assert.ok(Array.isArray(arr) && arr.length > 0,
+	    'randElt argument must be a non-empty array');
+
+	return (arr[Math.floor(Math.random() * arr.length)]);
+}
+
+function assertHrtime(a)
+{
+	mod_assert.ok(a[0] >= 0 && a[1] >= 0,
+	    'negative numbers not allowed in hrtimes');
+	mod_assert.ok(a[1] < 1e9, 'nanoseconds column overflow');
+}
+
+/*
+ * Compute the time elapsed between hrtime readings A and B, where A is later
+ * than B.  hrtime readings come from Node's process.hrtime().  There is no
+ * defined way to represent negative deltas, so it's illegal to diff B from A
+ * where the time denoted by B is later than the time denoted by A.  If this
+ * becomes valuable, we can define a representation and extend the
+ * implementation to support it.
+ */
+function hrtimeDiff(a, b)
+{
+	assertHrtime(a);
+	assertHrtime(b);
+	mod_assert.ok(a[0] > b[0] || (a[0] == b[0] && a[1] >= b[1]),
+	    'negative differences not allowed');
+
+	var rv = [ a[0] - b[0], 0 ];
+
+	if (a[1] >= b[1]) {
+		rv[1] = a[1] - b[1];
+	} else {
+		rv[0]--;
+		rv[1] = 1e9 - (b[1] - a[1]);
+	}
+
+	return (rv);
+}
+
+/*
+ * Convert a hrtime reading from the array format returned by Node's
+ * process.hrtime() into a scalar number of nanoseconds.
+ */
+function hrtimeNanosec(a)
+{
+	assertHrtime(a);
+
+	return (Math.floor(a[0] * 1e9 + a[1]));
+}
+
+/*
+ * Convert a hrtime reading from the array format returned by Node's
+ * process.hrtime() into a scalar number of microseconds.
+ */
+function hrtimeMicrosec(a)
+{
+	assertHrtime(a);
+
+	return (Math.floor(a[0] * 1e6 + a[1] / 1e3));
+}
+
+/*
+ * Convert a hrtime reading from the array format returned by Node's
+ * process.hrtime() into a scalar number of milliseconds.
+ */
+function hrtimeMillisec(a)
+{
+	assertHrtime(a);
+
+	return (Math.floor(a[0] * 1e3 + a[1] / 1e6));
+}
+
+/*
+ * Add two hrtime readings A and B, overwriting A with the result of the
+ * addition.  This function is useful for accumulating several hrtime intervals
+ * into a counter.  Returns A.
+ */
+function hrtimeAccum(a, b)
+{
+	assertHrtime(a);
+	assertHrtime(b);
+
+	/*
+	 * Accumulate the nanosecond component.
+	 */
+	a[1] += b[1];
+	if (a[1] >= 1e9) {
+		/*
+		 * The nanosecond component overflowed, so carry to the seconds
+		 * field.
+		 */
+		a[0]++;
+		a[1] -= 1e9;
+	}
+
+	/*
+	 * Accumulate the seconds component.
+	 */
+	a[0] += b[0];
+
+	return (a);
+}
+
+/*
+ * Add two hrtime readings A and B, returning the result as a new hrtime array.
+ * Does not modify either input argument.
+ */
+function hrtimeAdd(a, b)
+{
+	assertHrtime(a);
+
+	var rv = [ a[0], a[1] ];
+
+	return (hrtimeAccum(rv, b));
+}
+
+
+/*
+ * Check an object for unexpected properties.  Accepts the object to check, and
+ * an array of allowed property names (strings).  Returns an array of key names
+ * that were found on the object, but did not appear in the list of allowed
+ * properties.  If no properties were found, the returned array will be of
+ * zero length.
+ */
+function extraProperties(obj, allowed)
+{
+	mod_assert.ok(typeof (obj) === 'object' && obj !== null,
+	    'obj argument must be a non-null object');
+	mod_assert.ok(Array.isArray(allowed),
+	    'allowed argument must be an array of strings');
+	for (var i = 0; i < allowed.length; i++) {
+		mod_assert.ok(typeof (allowed[i]) === 'string',
+		    'allowed argument must be an array of strings');
+	}
+
+	return (Object.keys(obj).filter(function (key) {
+		return (allowed.indexOf(key) === -1);
+	}));
+}
+
+/*
+ * Given three sets of properties "provided" (may be undefined), "overrides"
+ * (required), and "defaults" (may be undefined), construct an object containing
+ * the union of these sets with "overrides" overriding "provided", and
+ * "provided" overriding "defaults".  None of the input objects are modified.
+ */
+function mergeObjects(provided, overrides, defaults)
+{
+	var rv, k;
+
+	rv = {};
+	if (defaults) {
+		for (k in defaults)
+			rv[k] = defaults[k];
+	}
+
+	if (provided) {
+		for (k in provided)
+			rv[k] = provided[k];
+	}
+
+	if (overrides) {
+		for (k in overrides)
+			rv[k] = overrides[k];
+	}
+
+	return (rv);
+}
+
+
+/***/ }),
 /* 927 */,
 /* 928 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
@@ -38321,7 +62925,21 @@ FormData.prototype.toString = function () {
 
 
 /***/ }),
-/* 929 */,
+/* 929 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+module.exports = hasNextPage
+
+const deprecate = __webpack_require__(370)
+const getPageLinks = __webpack_require__(577)
+
+function hasNextPage (link) {
+  deprecate(`octokit.hasNextPage() – You can use octokit.paginate or async iterators instead: https://github.com/octokit/rest.js#pagination.`)
+  return getPageLinks(link).next
+}
+
+
+/***/ }),
 /* 930 */
 /***/ (function(module) {
 
@@ -38392,7 +63010,7 @@ module.exports = function equal(a, b) {
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
 var baseGetTag = __webpack_require__(51),
-    isArray = __webpack_require__(143),
+    isArray = __webpack_require__(806),
     isObjectLike = __webpack_require__(337);
 
 /** `Object#toString` result references. */
@@ -38469,8 +63087,8 @@ function terminator(callback)
 
 module.exports = SSHBuffer;
 
-var assert = __webpack_require__(489);
-var Buffer = __webpack_require__(215).Buffer;
+var assert = __webpack_require__(757);
+var Buffer = __webpack_require__(481).Buffer;
 
 function SSHBuffer(opts) {
 	assert.object(opts, 'options');
@@ -38617,7 +63235,39 @@ SSHBuffer.prototype.write = function (buf) {
 
 
 /***/ }),
-/* 941 */,
+/* 941 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+function __export(m) {
+    for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
+}
+Object.defineProperty(exports, "__esModule", { value: true });
+__export(__webpack_require__(376));
+__export(__webpack_require__(150));
+__export(__webpack_require__(160));
+__export(__webpack_require__(700));
+__export(__webpack_require__(862));
+__export(__webpack_require__(524));
+__export(__webpack_require__(164));
+__export(__webpack_require__(527));
+__export(__webpack_require__(640));
+__export(__webpack_require__(448));
+__export(__webpack_require__(133));
+__export(__webpack_require__(406));
+__export(__webpack_require__(387));
+__export(__webpack_require__(179));
+__export(__webpack_require__(953));
+__export(__webpack_require__(102));
+__export(__webpack_require__(840));
+__export(__webpack_require__(24));
+__export(__webpack_require__(277));
+__export(__webpack_require__(14));
+__export(__webpack_require__(501));
+
+
+/***/ }),
 /* 942 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
@@ -38885,331 +63535,489 @@ function isLooseTypedArray(arr) {
 
 /***/ }),
 /* 945 */,
-/* 946 */,
+/* 946 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+
+var uuid = __webpack_require__(826)
+var CombinedStream = __webpack_require__(547)
+var isstream = __webpack_require__(382)
+var Buffer = __webpack_require__(608).Buffer
+
+function Multipart (request) {
+  this.request = request
+  this.boundary = uuid()
+  this.chunked = false
+  this.body = null
+}
+
+Multipart.prototype.isChunked = function (options) {
+  var self = this
+  var chunked = false
+  var parts = options.data || options
+
+  if (!parts.forEach) {
+    self.request.emit('error', new Error('Argument error, options.multipart.'))
+  }
+
+  if (options.chunked !== undefined) {
+    chunked = options.chunked
+  }
+
+  if (self.request.getHeader('transfer-encoding') === 'chunked') {
+    chunked = true
+  }
+
+  if (!chunked) {
+    parts.forEach(function (part) {
+      if (typeof part.body === 'undefined') {
+        self.request.emit('error', new Error('Body attribute missing in multipart.'))
+      }
+      if (isstream(part.body)) {
+        chunked = true
+      }
+    })
+  }
+
+  return chunked
+}
+
+Multipart.prototype.setHeaders = function (chunked) {
+  var self = this
+
+  if (chunked && !self.request.hasHeader('transfer-encoding')) {
+    self.request.setHeader('transfer-encoding', 'chunked')
+  }
+
+  var header = self.request.getHeader('content-type')
+
+  if (!header || header.indexOf('multipart') === -1) {
+    self.request.setHeader('content-type', 'multipart/related; boundary=' + self.boundary)
+  } else {
+    if (header.indexOf('boundary') !== -1) {
+      self.boundary = header.replace(/.*boundary=([^\s;]+).*/, '$1')
+    } else {
+      self.request.setHeader('content-type', header + '; boundary=' + self.boundary)
+    }
+  }
+}
+
+Multipart.prototype.build = function (parts, chunked) {
+  var self = this
+  var body = chunked ? new CombinedStream() : []
+
+  function add (part) {
+    if (typeof part === 'number') {
+      part = part.toString()
+    }
+    return chunked ? body.append(part) : body.push(Buffer.from(part))
+  }
+
+  if (self.request.preambleCRLF) {
+    add('\r\n')
+  }
+
+  parts.forEach(function (part) {
+    var preamble = '--' + self.boundary + '\r\n'
+    Object.keys(part).forEach(function (key) {
+      if (key === 'body') { return }
+      preamble += key + ': ' + part[key] + '\r\n'
+    })
+    preamble += '\r\n'
+    add(preamble)
+    add(part.body)
+    add('\r\n')
+  })
+  add('--' + self.boundary + '--')
+
+  if (self.request.postambleCRLF) {
+    add('\r\n')
+  }
+
+  return body
+}
+
+Multipart.prototype.onRequest = function (options) {
+  var self = this
+
+  var chunked = self.isChunked(options)
+  var parts = options.data || options
+
+  self.setHeaders(chunked)
+  self.chunked = chunked
+  self.body = self.build(parts, chunked)
+}
+
+exports.Multipart = Multipart
+
+
+/***/ }),
 /* 947 */,
 /* 948 */
+/***/ (function(module) {
+
+"use strict";
+
+
+/**
+ * Tries to execute a function and discards any error that occurs.
+ * @param {Function} fn - Function that might or might not throw an error.
+ * @returns {?*} Return-value of the function when no error occurred.
+ */
+module.exports = function(fn) {
+
+	try { return fn() } catch (e) {}
+
+}
+
+/***/ }),
+/* 949 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
 "use strict";
 
-module.exports = function(Promise, INTERNAL) {
-var THIS = {};
-var util = __webpack_require__(248);
-var nodebackForPromise = __webpack_require__(663);
-var withAppended = util.withAppended;
-var maybeWrapAsError = util.maybeWrapAsError;
-var canEvaluate = util.canEvaluate;
-var TypeError = __webpack_require__(607).TypeError;
-var defaultSuffix = "Async";
-var defaultPromisified = {__isPromisified__: true};
-var noCopyProps = [
-    "arity",    "length",
-    "name",
-    "arguments",
-    "caller",
-    "callee",
-    "prototype",
-    "__isPromisified__"
-];
-var noCopyPropsPattern = new RegExp("^(?:" + noCopyProps.join("|") + ")$");
 
-var defaultFilter = function(name) {
-    return util.isIdentifier(name) &&
-        name.charAt(0) !== "_" &&
-        name !== "constructor";
+
+module.exports = {
+  copy: copy,
+  checkDataType: checkDataType,
+  checkDataTypes: checkDataTypes,
+  coerceToTypes: coerceToTypes,
+  toHash: toHash,
+  getProperty: getProperty,
+  escapeQuotes: escapeQuotes,
+  equal: __webpack_require__(930),
+  ucs2length: __webpack_require__(691),
+  varOccurences: varOccurences,
+  varReplace: varReplace,
+  cleanUpCode: cleanUpCode,
+  finalCleanUpCode: finalCleanUpCode,
+  schemaHasRules: schemaHasRules,
+  schemaHasRulesExcept: schemaHasRulesExcept,
+  schemaUnknownRules: schemaUnknownRules,
+  toQuotedString: toQuotedString,
+  getPathExpr: getPathExpr,
+  getPath: getPath,
+  getData: getData,
+  unescapeFragment: unescapeFragment,
+  unescapeJsonPointer: unescapeJsonPointer,
+  escapeFragment: escapeFragment,
+  escapeJsonPointer: escapeJsonPointer
 };
 
-function propsFilter(key) {
-    return !noCopyPropsPattern.test(key);
+
+function copy(o, to) {
+  to = to || {};
+  for (var key in o) to[key] = o[key];
+  return to;
 }
 
-function isPromisified(fn) {
-    try {
-        return fn.__isPromisified__ === true;
-    }
-    catch (e) {
-        return false;
-    }
+
+function checkDataType(dataType, data, negate) {
+  var EQUAL = negate ? ' !== ' : ' === '
+    , AND = negate ? ' || ' : ' && '
+    , OK = negate ? '!' : ''
+    , NOT = negate ? '' : '!';
+  switch (dataType) {
+    case 'null': return data + EQUAL + 'null';
+    case 'array': return OK + 'Array.isArray(' + data + ')';
+    case 'object': return '(' + OK + data + AND +
+                          'typeof ' + data + EQUAL + '"object"' + AND +
+                          NOT + 'Array.isArray(' + data + '))';
+    case 'integer': return '(typeof ' + data + EQUAL + '"number"' + AND +
+                           NOT + '(' + data + ' % 1)' +
+                           AND + data + EQUAL + data + ')';
+    default: return 'typeof ' + data + EQUAL + '"' + dataType + '"';
+  }
 }
 
-function hasPromisified(obj, key, suffix) {
-    var val = util.getDataPropertyOrDefault(obj, key + suffix,
-                                            defaultPromisified);
-    return val ? isPromisified(val) : false;
-}
-function checkValid(ret, suffix, suffixRegexp) {
-    for (var i = 0; i < ret.length; i += 2) {
-        var key = ret[i];
-        if (suffixRegexp.test(key)) {
-            var keyWithoutAsyncSuffix = key.replace(suffixRegexp, "");
-            for (var j = 0; j < ret.length; j += 2) {
-                if (ret[j] === keyWithoutAsyncSuffix) {
-                    throw new TypeError("Cannot promisify an API that has normal methods with '%s'-suffix\u000a\u000a    See http://goo.gl/MqrFmX\u000a"
-                        .replace("%s", suffix));
-                }
-            }
-        }
-    }
-}
 
-function promisifiableMethods(obj, suffix, suffixRegexp, filter) {
-    var keys = util.inheritedDataKeys(obj);
-    var ret = [];
-    for (var i = 0; i < keys.length; ++i) {
-        var key = keys[i];
-        var value = obj[key];
-        var passesDefaultFilter = filter === defaultFilter
-            ? true : defaultFilter(key, value, obj);
-        if (typeof value === "function" &&
-            !isPromisified(value) &&
-            !hasPromisified(obj, key, suffix) &&
-            filter(key, value, obj, passesDefaultFilter)) {
-            ret.push(key, value);
-        }
-    }
-    checkValid(ret, suffix, suffixRegexp);
-    return ret;
+function checkDataTypes(dataTypes, data) {
+  switch (dataTypes.length) {
+    case 1: return checkDataType(dataTypes[0], data, true);
+    default:
+      var code = '';
+      var types = toHash(dataTypes);
+      if (types.array && types.object) {
+        code = types.null ? '(': '(!' + data + ' || ';
+        code += 'typeof ' + data + ' !== "object")';
+        delete types.null;
+        delete types.array;
+        delete types.object;
+      }
+      if (types.number) delete types.integer;
+      for (var t in types)
+        code += (code ? ' && ' : '' ) + checkDataType(t, data, true);
+
+      return code;
+  }
 }
 
-var escapeIdentRegex = function(str) {
-    return str.replace(/([$])/, "\\$");
-};
 
-var makeNodePromisifiedEval;
-if (true) {
-var switchCaseArgumentOrder = function(likelyArgumentCount) {
-    var ret = [likelyArgumentCount];
-    var min = Math.max(0, likelyArgumentCount - 1 - 3);
-    for(var i = likelyArgumentCount - 1; i >= min; --i) {
-        ret.push(i);
+var COERCE_TO_TYPES = toHash([ 'string', 'number', 'integer', 'boolean', 'null' ]);
+function coerceToTypes(optionCoerceTypes, dataTypes) {
+  if (Array.isArray(dataTypes)) {
+    var types = [];
+    for (var i=0; i<dataTypes.length; i++) {
+      var t = dataTypes[i];
+      if (COERCE_TO_TYPES[t]) types[types.length] = t;
+      else if (optionCoerceTypes === 'array' && t === 'array') types[types.length] = t;
     }
-    for(var i = likelyArgumentCount + 1; i <= 3; ++i) {
-        ret.push(i);
-    }
-    return ret;
-};
-
-var argumentSequence = function(argumentCount) {
-    return util.filledRange(argumentCount, "_arg", "");
-};
-
-var parameterDeclaration = function(parameterCount) {
-    return util.filledRange(
-        Math.max(parameterCount, 3), "_arg", "");
-};
-
-var parameterCount = function(fn) {
-    if (typeof fn.length === "number") {
-        return Math.max(Math.min(fn.length, 1023 + 1), 0);
-    }
-    return 0;
-};
-
-makeNodePromisifiedEval =
-function(callback, receiver, originalName, fn, _, multiArgs) {
-    var newParameterCount = Math.max(0, parameterCount(fn) - 1);
-    var argumentOrder = switchCaseArgumentOrder(newParameterCount);
-    var shouldProxyThis = typeof callback === "string" || receiver === THIS;
-
-    function generateCallForArgumentCount(count) {
-        var args = argumentSequence(count).join(", ");
-        var comma = count > 0 ? ", " : "";
-        var ret;
-        if (shouldProxyThis) {
-            ret = "ret = callback.call(this, {{args}}, nodeback); break;\n";
-        } else {
-            ret = receiver === undefined
-                ? "ret = callback({{args}}, nodeback); break;\n"
-                : "ret = callback.call(receiver, {{args}}, nodeback); break;\n";
-        }
-        return ret.replace("{{args}}", args).replace(", ", comma);
-    }
-
-    function generateArgumentSwitchCase() {
-        var ret = "";
-        for (var i = 0; i < argumentOrder.length; ++i) {
-            ret += "case " + argumentOrder[i] +":" +
-                generateCallForArgumentCount(argumentOrder[i]);
-        }
-
-        ret += "                                                             \n\
-        default:                                                             \n\
-            var args = new Array(len + 1);                                   \n\
-            var i = 0;                                                       \n\
-            for (var i = 0; i < len; ++i) {                                  \n\
-               args[i] = arguments[i];                                       \n\
-            }                                                                \n\
-            args[i] = nodeback;                                              \n\
-            [CodeForCall]                                                    \n\
-            break;                                                           \n\
-        ".replace("[CodeForCall]", (shouldProxyThis
-                                ? "ret = callback.apply(this, args);\n"
-                                : "ret = callback.apply(receiver, args);\n"));
-        return ret;
-    }
-
-    var getFunctionCode = typeof callback === "string"
-                                ? ("this != null ? this['"+callback+"'] : fn")
-                                : "fn";
-    var body = "'use strict';                                                \n\
-        var ret = function (Parameters) {                                    \n\
-            'use strict';                                                    \n\
-            var len = arguments.length;                                      \n\
-            var promise = new Promise(INTERNAL);                             \n\
-            promise._captureStackTrace();                                    \n\
-            var nodeback = nodebackForPromise(promise, " + multiArgs + ");   \n\
-            var ret;                                                         \n\
-            var callback = tryCatch([GetFunctionCode]);                      \n\
-            switch(len) {                                                    \n\
-                [CodeForSwitchCase]                                          \n\
-            }                                                                \n\
-            if (ret === errorObj) {                                          \n\
-                promise._rejectCallback(maybeWrapAsError(ret.e), true, true);\n\
-            }                                                                \n\
-            if (!promise._isFateSealed()) promise._setAsyncGuaranteed();     \n\
-            return promise;                                                  \n\
-        };                                                                   \n\
-        notEnumerableProp(ret, '__isPromisified__', true);                   \n\
-        return ret;                                                          \n\
-    ".replace("[CodeForSwitchCase]", generateArgumentSwitchCase())
-        .replace("[GetFunctionCode]", getFunctionCode);
-    body = body.replace("Parameters", parameterDeclaration(newParameterCount));
-    return new Function("Promise",
-                        "fn",
-                        "receiver",
-                        "withAppended",
-                        "maybeWrapAsError",
-                        "nodebackForPromise",
-                        "tryCatch",
-                        "errorObj",
-                        "notEnumerableProp",
-                        "INTERNAL",
-                        body)(
-                    Promise,
-                    fn,
-                    receiver,
-                    withAppended,
-                    maybeWrapAsError,
-                    nodebackForPromise,
-                    util.tryCatch,
-                    util.errorObj,
-                    util.notEnumerableProp,
-                    INTERNAL);
-};
+    if (types.length) return types;
+  } else if (COERCE_TO_TYPES[dataTypes]) {
+    return [dataTypes];
+  } else if (optionCoerceTypes === 'array' && dataTypes === 'array') {
+    return ['array'];
+  }
 }
 
-function makeNodePromisifiedClosure(callback, receiver, _, fn, __, multiArgs) {
-    var defaultThis = (function() {return this;})();
-    var method = callback;
-    if (typeof method === "string") {
-        callback = fn;
-    }
-    function promisified() {
-        var _receiver = receiver;
-        if (receiver === THIS) _receiver = this;
-        var promise = new Promise(INTERNAL);
-        promise._captureStackTrace();
-        var cb = typeof method === "string" && this !== defaultThis
-            ? this[method] : callback;
-        var fn = nodebackForPromise(promise, multiArgs);
-        try {
-            cb.apply(_receiver, withAppended(arguments, fn));
-        } catch(e) {
-            promise._rejectCallback(maybeWrapAsError(e), true, true);
-        }
-        if (!promise._isFateSealed()) promise._setAsyncGuaranteed();
-        return promise;
-    }
-    util.notEnumerableProp(promisified, "__isPromisified__", true);
-    return promisified;
+
+function toHash(arr) {
+  var hash = {};
+  for (var i=0; i<arr.length; i++) hash[arr[i]] = true;
+  return hash;
 }
 
-var makeNodePromisified = canEvaluate
-    ? makeNodePromisifiedEval
-    : makeNodePromisifiedClosure;
 
-function promisifyAll(obj, suffix, filter, promisifier, multiArgs) {
-    var suffixRegexp = new RegExp(escapeIdentRegex(suffix) + "$");
-    var methods =
-        promisifiableMethods(obj, suffix, suffixRegexp, filter);
-
-    for (var i = 0, len = methods.length; i < len; i+= 2) {
-        var key = methods[i];
-        var fn = methods[i+1];
-        var promisifiedKey = key + suffix;
-        if (promisifier === makeNodePromisified) {
-            obj[promisifiedKey] =
-                makeNodePromisified(key, THIS, key, fn, suffix, multiArgs);
-        } else {
-            var promisified = promisifier(fn, function() {
-                return makeNodePromisified(key, THIS, key,
-                                           fn, suffix, multiArgs);
-            });
-            util.notEnumerableProp(promisified, "__isPromisified__", true);
-            obj[promisifiedKey] = promisified;
-        }
-    }
-    util.toFastProperties(obj);
-    return obj;
+var IDENTIFIER = /^[a-z$_][a-z$_0-9]*$/i;
+var SINGLE_QUOTE = /'|\\/g;
+function getProperty(key) {
+  return typeof key == 'number'
+          ? '[' + key + ']'
+          : IDENTIFIER.test(key)
+            ? '.' + key
+            : "['" + escapeQuotes(key) + "']";
 }
 
-function promisify(callback, receiver, multiArgs) {
-    return makeNodePromisified(callback, receiver, undefined,
-                                callback, null, multiArgs);
+
+function escapeQuotes(str) {
+  return str.replace(SINGLE_QUOTE, '\\$&')
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '\\r')
+            .replace(/\f/g, '\\f')
+            .replace(/\t/g, '\\t');
 }
 
-Promise.promisify = function (fn, options) {
-    if (typeof fn !== "function") {
-        throw new TypeError("expecting a function but got " + util.classString(fn));
-    }
-    if (isPromisified(fn)) {
-        return fn;
-    }
-    options = Object(options);
-    var receiver = options.context === undefined ? THIS : options.context;
-    var multiArgs = !!options.multiArgs;
-    var ret = promisify(fn, receiver, multiArgs);
-    util.copyDescriptors(fn, ret, propsFilter);
-    return ret;
-};
 
-Promise.promisifyAll = function (target, options) {
-    if (typeof target !== "function" && typeof target !== "object") {
-        throw new TypeError("the target of promisifyAll must be an object or a function\u000a\u000a    See http://goo.gl/MqrFmX\u000a");
+function varOccurences(str, dataVar) {
+  dataVar += '[^0-9]';
+  var matches = str.match(new RegExp(dataVar, 'g'));
+  return matches ? matches.length : 0;
+}
+
+
+function varReplace(str, dataVar, expr) {
+  dataVar += '([^0-9])';
+  expr = expr.replace(/\$/g, '$$$$');
+  return str.replace(new RegExp(dataVar, 'g'), expr + '$1');
+}
+
+
+var EMPTY_ELSE = /else\s*{\s*}/g
+  , EMPTY_IF_NO_ELSE = /if\s*\([^)]+\)\s*\{\s*\}(?!\s*else)/g
+  , EMPTY_IF_WITH_ELSE = /if\s*\(([^)]+)\)\s*\{\s*\}\s*else(?!\s*if)/g;
+function cleanUpCode(out) {
+  return out.replace(EMPTY_ELSE, '')
+            .replace(EMPTY_IF_NO_ELSE, '')
+            .replace(EMPTY_IF_WITH_ELSE, 'if (!($1))');
+}
+
+
+var ERRORS_REGEXP = /[^v.]errors/g
+  , REMOVE_ERRORS = /var errors = 0;|var vErrors = null;|validate.errors = vErrors;/g
+  , REMOVE_ERRORS_ASYNC = /var errors = 0;|var vErrors = null;/g
+  , RETURN_VALID = 'return errors === 0;'
+  , RETURN_TRUE = 'validate.errors = null; return true;'
+  , RETURN_ASYNC = /if \(errors === 0\) return data;\s*else throw new ValidationError\(vErrors\);/
+  , RETURN_DATA_ASYNC = 'return data;'
+  , ROOTDATA_REGEXP = /[^A-Za-z_$]rootData[^A-Za-z0-9_$]/g
+  , REMOVE_ROOTDATA = /if \(rootData === undefined\) rootData = data;/;
+
+function finalCleanUpCode(out, async) {
+  var matches = out.match(ERRORS_REGEXP);
+  if (matches && matches.length == 2) {
+    out = async
+          ? out.replace(REMOVE_ERRORS_ASYNC, '')
+               .replace(RETURN_ASYNC, RETURN_DATA_ASYNC)
+          : out.replace(REMOVE_ERRORS, '')
+               .replace(RETURN_VALID, RETURN_TRUE);
+  }
+
+  matches = out.match(ROOTDATA_REGEXP);
+  if (!matches || matches.length !== 3) return out;
+  return out.replace(REMOVE_ROOTDATA, '');
+}
+
+
+function schemaHasRules(schema, rules) {
+  if (typeof schema == 'boolean') return !schema;
+  for (var key in schema) if (rules[key]) return true;
+}
+
+
+function schemaHasRulesExcept(schema, rules, exceptKeyword) {
+  if (typeof schema == 'boolean') return !schema && exceptKeyword != 'not';
+  for (var key in schema) if (key != exceptKeyword && rules[key]) return true;
+}
+
+
+function schemaUnknownRules(schema, rules) {
+  if (typeof schema == 'boolean') return;
+  for (var key in schema) if (!rules[key]) return key;
+}
+
+
+function toQuotedString(str) {
+  return '\'' + escapeQuotes(str) + '\'';
+}
+
+
+function getPathExpr(currentPath, expr, jsonPointers, isNumber) {
+  var path = jsonPointers // false by default
+              ? '\'/\' + ' + expr + (isNumber ? '' : '.replace(/~/g, \'~0\').replace(/\\//g, \'~1\')')
+              : (isNumber ? '\'[\' + ' + expr + ' + \']\'' : '\'[\\\'\' + ' + expr + ' + \'\\\']\'');
+  return joinPaths(currentPath, path);
+}
+
+
+function getPath(currentPath, prop, jsonPointers) {
+  var path = jsonPointers // false by default
+              ? toQuotedString('/' + escapeJsonPointer(prop))
+              : toQuotedString(getProperty(prop));
+  return joinPaths(currentPath, path);
+}
+
+
+var JSON_POINTER = /^\/(?:[^~]|~0|~1)*$/;
+var RELATIVE_JSON_POINTER = /^([0-9]+)(#|\/(?:[^~]|~0|~1)*)?$/;
+function getData($data, lvl, paths) {
+  var up, jsonPointer, data, matches;
+  if ($data === '') return 'rootData';
+  if ($data[0] == '/') {
+    if (!JSON_POINTER.test($data)) throw new Error('Invalid JSON-pointer: ' + $data);
+    jsonPointer = $data;
+    data = 'rootData';
+  } else {
+    matches = $data.match(RELATIVE_JSON_POINTER);
+    if (!matches) throw new Error('Invalid JSON-pointer: ' + $data);
+    up = +matches[1];
+    jsonPointer = matches[2];
+    if (jsonPointer == '#') {
+      if (up >= lvl) throw new Error('Cannot access property/index ' + up + ' levels up, current level is ' + lvl);
+      return paths[lvl - up];
     }
-    options = Object(options);
-    var multiArgs = !!options.multiArgs;
-    var suffix = options.suffix;
-    if (typeof suffix !== "string") suffix = defaultSuffix;
-    var filter = options.filter;
-    if (typeof filter !== "function") filter = defaultFilter;
-    var promisifier = options.promisifier;
-    if (typeof promisifier !== "function") promisifier = makeNodePromisified;
 
-    if (!util.isIdentifier(suffix)) {
-        throw new RangeError("suffix must be a valid identifier\u000a\u000a    See http://goo.gl/MqrFmX\u000a");
+    if (up > lvl) throw new Error('Cannot access data ' + up + ' levels up, current level is ' + lvl);
+    data = 'data' + ((lvl - up) || '');
+    if (!jsonPointer) return data;
+  }
+
+  var expr = data;
+  var segments = jsonPointer.split('/');
+  for (var i=0; i<segments.length; i++) {
+    var segment = segments[i];
+    if (segment) {
+      data += getProperty(unescapeJsonPointer(segment));
+      expr += ' && ' + data;
     }
+  }
+  return expr;
+}
 
-    var keys = util.inheritedDataKeys(target);
-    for (var i = 0; i < keys.length; ++i) {
-        var value = target[keys[i]];
-        if (keys[i] !== "constructor" &&
-            util.isClass(value)) {
-            promisifyAll(value.prototype, suffix, filter, promisifier,
-                multiArgs);
-            promisifyAll(value, suffix, filter, promisifier, multiArgs);
-        }
-    }
 
-    return promisifyAll(target, suffix, filter, promisifier, multiArgs);
-};
-};
+function joinPaths (a, b) {
+  if (a == '""') return b;
+  return (a + ' + ' + b).replace(/' \+ '/g, '');
+}
 
+
+function unescapeFragment(str) {
+  return unescapeJsonPointer(decodeURIComponent(str));
+}
+
+
+function escapeFragment(str) {
+  return encodeURIComponent(escapeJsonPointer(str));
+}
+
+
+function escapeJsonPointer(str) {
+  return str.replace(/~/g, '~0').replace(/\//g, '~1');
+}
+
+
+function unescapeJsonPointer(str) {
+  return str.replace(/~1/g, '/').replace(/~0/g, '~');
+}
 
 
 /***/ }),
-/* 949 */,
-/* 950 */,
+/* 950 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const url = __webpack_require__(835);
+function getProxyUrl(reqUrl) {
+    let usingSsl = reqUrl.protocol === 'https:';
+    let proxyUrl;
+    if (checkBypass(reqUrl)) {
+        return proxyUrl;
+    }
+    let proxyVar;
+    if (usingSsl) {
+        proxyVar = process.env["https_proxy"] ||
+            process.env["HTTPS_PROXY"];
+    }
+    else {
+        proxyVar = process.env["http_proxy"] ||
+            process.env["HTTP_PROXY"];
+    }
+    if (proxyVar) {
+        proxyUrl = url.parse(proxyVar);
+    }
+    return proxyUrl;
+}
+exports.getProxyUrl = getProxyUrl;
+function checkBypass(reqUrl) {
+    if (!reqUrl.hostname) {
+        return false;
+    }
+    let noProxy = process.env["no_proxy"] || process.env["NO_PROXY"] || '';
+    if (!noProxy) {
+        return false;
+    }
+    // Determine the request port
+    let reqPort;
+    if (reqUrl.port) {
+        reqPort = Number(reqUrl.port);
+    }
+    else if (reqUrl.protocol === 'http:') {
+        reqPort = 80;
+    }
+    else if (reqUrl.protocol === 'https:') {
+        reqPort = 443;
+    }
+    // Format the request hostname and hostname with port
+    let upperReqHosts = [reqUrl.hostname.toUpperCase()];
+    if (typeof reqPort === 'number') {
+        upperReqHosts.push(`${upperReqHosts[0]}:${reqPort}`);
+    }
+    // Compare request host against noproxy
+    for (let upperNoProxyItem of noProxy.split(',').map(x => x.trim().toUpperCase()).filter(x => x)) {
+        if (upperReqHosts.some(x => x === upperNoProxyItem)) {
+            return true;
+        }
+    }
+    return false;
+}
+exports.checkBypass = checkBypass;
+
+
+/***/ }),
 /* 951 */,
 /* 952 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
@@ -39255,21 +64063,446 @@ module.exports = {
 
 
 /***/ }),
-/* 953 */,
-/* 954 */,
+/* 953 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+const base_1 = __webpack_require__(142);
+const __1 = __webpack_require__(941);
+const command_1 = __webpack_require__(150);
+exports.IssuePaths = {
+    issue: '/issues/{issueId}',
+    issues: '/issues',
+};
+exports.CommandPaths = {
+    commands: '/commands'
+};
+class IssueEndpoint extends base_1.BaseEndpoint {
+    byId(issueId) {
+        return this.getResourceWithFields(this.format(exports.IssuePaths.issue, { issueId }), __1.IssueImpl);
+    }
+    search(query, paginationOptions = {}) {
+        return this.getResourceWithFields(exports.IssuePaths.issues, __1.ReducedIssueImpl, {
+            qs: Object.assign({ query }, paginationOptions)
+        });
+    }
+    delete(issueId) {
+        return this.toPromise(this.client.delete(this.format(exports.IssuePaths.issue, { issueId })));
+    }
+    create(issue) {
+        return this.postResourceWithFields(exports.IssuePaths.issues, __1.IssueImpl, {
+            body: issue
+        });
+    }
+    update(issue) {
+        return this.postResourceWithFields(this.format(exports.IssuePaths.issue, { issueId: issue.id }), __1.IssueImpl, {
+            body: issue
+        });
+    }
+    executeCommand(command) {
+        return this.postResourceWithFields(exports.CommandPaths.commands, command_1.CommandListImpl, {
+            body: command
+        });
+    }
+}
+exports.IssueEndpoint = IssueEndpoint;
+
+
+/***/ }),
+/* 954 */
+/***/ (function(module) {
+
+module.exports = validateAuth;
+
+function validateAuth(auth) {
+  if (typeof auth === "string") {
+    return;
+  }
+
+  if (typeof auth === "function") {
+    return;
+  }
+
+  if (auth.username && auth.password) {
+    return;
+  }
+
+  if (auth.clientId && auth.clientSecret) {
+    return;
+  }
+
+  throw new Error(`Invalid "auth" option: ${JSON.stringify(auth)}`);
+}
+
+
+/***/ }),
 /* 955 */
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
 "use strict";
 
+const path = __webpack_require__(622);
+const childProcess = __webpack_require__(129);
+const crossSpawn = __webpack_require__(20);
+const stripEof = __webpack_require__(768);
+const npmRunPath = __webpack_require__(621);
+const isStream = __webpack_require__(323);
+const _getStream = __webpack_require__(145);
+const pFinally = __webpack_require__(697);
+const onExit = __webpack_require__(260);
+const errname = __webpack_require__(427);
+const stdio = __webpack_require__(168);
 
-var util = __webpack_require__(855);
+const TEN_MEGABYTES = 1000 * 1000 * 10;
 
-module.exports = SchemaObject;
+function handleArgs(cmd, args, opts) {
+	let parsed;
 
-function SchemaObject(obj) {
-  util.copy(obj, this);
+	opts = Object.assign({
+		extendEnv: true,
+		env: {}
+	}, opts);
+
+	if (opts.extendEnv) {
+		opts.env = Object.assign({}, process.env, opts.env);
+	}
+
+	if (opts.__winShell === true) {
+		delete opts.__winShell;
+		parsed = {
+			command: cmd,
+			args,
+			options: opts,
+			file: cmd,
+			original: {
+				cmd,
+				args
+			}
+		};
+	} else {
+		parsed = crossSpawn._parse(cmd, args, opts);
+	}
+
+	opts = Object.assign({
+		maxBuffer: TEN_MEGABYTES,
+		buffer: true,
+		stripEof: true,
+		preferLocal: true,
+		localDir: parsed.options.cwd || process.cwd(),
+		encoding: 'utf8',
+		reject: true,
+		cleanup: true
+	}, parsed.options);
+
+	opts.stdio = stdio(opts);
+
+	if (opts.preferLocal) {
+		opts.env = npmRunPath.env(Object.assign({}, opts, {cwd: opts.localDir}));
+	}
+
+	if (opts.detached) {
+		// #115
+		opts.cleanup = false;
+	}
+
+	if (process.platform === 'win32' && path.basename(parsed.command) === 'cmd.exe') {
+		// #116
+		parsed.args.unshift('/q');
+	}
+
+	return {
+		cmd: parsed.command,
+		args: parsed.args,
+		opts,
+		parsed
+	};
 }
+
+function handleInput(spawned, input) {
+	if (input === null || input === undefined) {
+		return;
+	}
+
+	if (isStream(input)) {
+		input.pipe(spawned.stdin);
+	} else {
+		spawned.stdin.end(input);
+	}
+}
+
+function handleOutput(opts, val) {
+	if (val && opts.stripEof) {
+		val = stripEof(val);
+	}
+
+	return val;
+}
+
+function handleShell(fn, cmd, opts) {
+	let file = '/bin/sh';
+	let args = ['-c', cmd];
+
+	opts = Object.assign({}, opts);
+
+	if (process.platform === 'win32') {
+		opts.__winShell = true;
+		file = process.env.comspec || 'cmd.exe';
+		args = ['/s', '/c', `"${cmd}"`];
+		opts.windowsVerbatimArguments = true;
+	}
+
+	if (opts.shell) {
+		file = opts.shell;
+		delete opts.shell;
+	}
+
+	return fn(file, args, opts);
+}
+
+function getStream(process, stream, {encoding, buffer, maxBuffer}) {
+	if (!process[stream]) {
+		return null;
+	}
+
+	let ret;
+
+	if (!buffer) {
+		// TODO: Use `ret = util.promisify(stream.finished)(process[stream]);` when targeting Node.js 10
+		ret = new Promise((resolve, reject) => {
+			process[stream]
+				.once('end', resolve)
+				.once('error', reject);
+		});
+	} else if (encoding) {
+		ret = _getStream(process[stream], {
+			encoding,
+			maxBuffer
+		});
+	} else {
+		ret = _getStream.buffer(process[stream], {maxBuffer});
+	}
+
+	return ret.catch(err => {
+		err.stream = stream;
+		err.message = `${stream} ${err.message}`;
+		throw err;
+	});
+}
+
+function makeError(result, options) {
+	const {stdout, stderr} = result;
+
+	let err = result.error;
+	const {code, signal} = result;
+
+	const {parsed, joinedCmd} = options;
+	const timedOut = options.timedOut || false;
+
+	if (!err) {
+		let output = '';
+
+		if (Array.isArray(parsed.opts.stdio)) {
+			if (parsed.opts.stdio[2] !== 'inherit') {
+				output += output.length > 0 ? stderr : `\n${stderr}`;
+			}
+
+			if (parsed.opts.stdio[1] !== 'inherit') {
+				output += `\n${stdout}`;
+			}
+		} else if (parsed.opts.stdio !== 'inherit') {
+			output = `\n${stderr}${stdout}`;
+		}
+
+		err = new Error(`Command failed: ${joinedCmd}${output}`);
+		err.code = code < 0 ? errname(code) : code;
+	}
+
+	err.stdout = stdout;
+	err.stderr = stderr;
+	err.failed = true;
+	err.signal = signal || null;
+	err.cmd = joinedCmd;
+	err.timedOut = timedOut;
+
+	return err;
+}
+
+function joinCmd(cmd, args) {
+	let joinedCmd = cmd;
+
+	if (Array.isArray(args) && args.length > 0) {
+		joinedCmd += ' ' + args.join(' ');
+	}
+
+	return joinedCmd;
+}
+
+module.exports = (cmd, args, opts) => {
+	const parsed = handleArgs(cmd, args, opts);
+	const {encoding, buffer, maxBuffer} = parsed.opts;
+	const joinedCmd = joinCmd(cmd, args);
+
+	let spawned;
+	try {
+		spawned = childProcess.spawn(parsed.cmd, parsed.args, parsed.opts);
+	} catch (err) {
+		return Promise.reject(err);
+	}
+
+	let removeExitHandler;
+	if (parsed.opts.cleanup) {
+		removeExitHandler = onExit(() => {
+			spawned.kill();
+		});
+	}
+
+	let timeoutId = null;
+	let timedOut = false;
+
+	const cleanup = () => {
+		if (timeoutId) {
+			clearTimeout(timeoutId);
+			timeoutId = null;
+		}
+
+		if (removeExitHandler) {
+			removeExitHandler();
+		}
+	};
+
+	if (parsed.opts.timeout > 0) {
+		timeoutId = setTimeout(() => {
+			timeoutId = null;
+			timedOut = true;
+			spawned.kill(parsed.opts.killSignal);
+		}, parsed.opts.timeout);
+	}
+
+	const processDone = new Promise(resolve => {
+		spawned.on('exit', (code, signal) => {
+			cleanup();
+			resolve({code, signal});
+		});
+
+		spawned.on('error', err => {
+			cleanup();
+			resolve({error: err});
+		});
+
+		if (spawned.stdin) {
+			spawned.stdin.on('error', err => {
+				cleanup();
+				resolve({error: err});
+			});
+		}
+	});
+
+	function destroy() {
+		if (spawned.stdout) {
+			spawned.stdout.destroy();
+		}
+
+		if (spawned.stderr) {
+			spawned.stderr.destroy();
+		}
+	}
+
+	const handlePromise = () => pFinally(Promise.all([
+		processDone,
+		getStream(spawned, 'stdout', {encoding, buffer, maxBuffer}),
+		getStream(spawned, 'stderr', {encoding, buffer, maxBuffer})
+	]).then(arr => {
+		const result = arr[0];
+		result.stdout = arr[1];
+		result.stderr = arr[2];
+
+		if (result.error || result.code !== 0 || result.signal !== null) {
+			const err = makeError(result, {
+				joinedCmd,
+				parsed,
+				timedOut
+			});
+
+			// TODO: missing some timeout logic for killed
+			// https://github.com/nodejs/node/blob/master/lib/child_process.js#L203
+			// err.killed = spawned.killed || killed;
+			err.killed = err.killed || spawned.killed;
+
+			if (!parsed.opts.reject) {
+				return err;
+			}
+
+			throw err;
+		}
+
+		return {
+			stdout: handleOutput(parsed.opts, result.stdout),
+			stderr: handleOutput(parsed.opts, result.stderr),
+			code: 0,
+			failed: false,
+			killed: false,
+			signal: null,
+			cmd: joinedCmd,
+			timedOut: false
+		};
+	}), destroy);
+
+	crossSpawn._enoent.hookChildProcess(spawned, parsed.parsed);
+
+	handleInput(spawned, parsed.opts.input);
+
+	spawned.then = (onfulfilled, onrejected) => handlePromise().then(onfulfilled, onrejected);
+	spawned.catch = onrejected => handlePromise().catch(onrejected);
+
+	return spawned;
+};
+
+// TODO: set `stderr: 'ignore'` when that option is implemented
+module.exports.stdout = (...args) => module.exports(...args).then(x => x.stdout);
+
+// TODO: set `stdout: 'ignore'` when that option is implemented
+module.exports.stderr = (...args) => module.exports(...args).then(x => x.stderr);
+
+module.exports.shell = (cmd, opts) => handleShell(module.exports, cmd, opts);
+
+module.exports.sync = (cmd, args, opts) => {
+	const parsed = handleArgs(cmd, args, opts);
+	const joinedCmd = joinCmd(cmd, args);
+
+	if (isStream(parsed.opts.input)) {
+		throw new TypeError('The `input` option cannot be a stream in sync mode');
+	}
+
+	const result = childProcess.spawnSync(parsed.cmd, parsed.args, parsed.opts);
+	result.code = result.status;
+
+	if (result.error || result.status !== 0 || result.signal !== null) {
+		const err = makeError(result, {
+			joinedCmd,
+			parsed
+		});
+
+		if (!parsed.opts.reject) {
+			return err;
+		}
+
+		throw err;
+	}
+
+	return {
+		stdout: handleOutput(parsed.opts, result.stdout),
+		stderr: handleOutput(parsed.opts, result.stderr),
+		code: 0,
+		failed: false,
+		signal: null,
+		cmd: joinedCmd,
+		timedOut: false
+	};
+};
+
+module.exports.shellSync = (cmd, opts) => handleShell(module.exports.sync, cmd, opts);
 
 
 /***/ }),
@@ -39280,10 +64513,10 @@ function SchemaObject(obj) {
  * verror.js: richer JavaScript errors
  */
 
-var mod_assertplus = __webpack_require__(489);
+var mod_assertplus = __webpack_require__(757);
 var mod_util = __webpack_require__(669);
 
-var mod_extsprintf = __webpack_require__(697);
+var mod_extsprintf = __webpack_require__(432);
 var mod_isError = __webpack_require__(286).isError;
 var sprintf = mod_extsprintf.sprintf;
 
@@ -40009,7 +65242,64 @@ exports.header = function (uri, method, opts) {
 
 /***/ }),
 /* 965 */,
-/* 966 */,
+/* 966 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+"use strict";
+
+const {PassThrough} = __webpack_require__(413);
+
+module.exports = options => {
+	options = Object.assign({}, options);
+
+	const {array} = options;
+	let {encoding} = options;
+	const buffer = encoding === 'buffer';
+	let objectMode = false;
+
+	if (array) {
+		objectMode = !(encoding || buffer);
+	} else {
+		encoding = encoding || 'utf8';
+	}
+
+	if (buffer) {
+		encoding = null;
+	}
+
+	let len = 0;
+	const ret = [];
+	const stream = new PassThrough({objectMode});
+
+	if (encoding) {
+		stream.setEncoding(encoding);
+	}
+
+	stream.on('data', chunk => {
+		ret.push(chunk);
+
+		if (objectMode) {
+			len = ret.length;
+		} else {
+			len += chunk.length;
+		}
+	});
+
+	stream.getBufferedValue = () => {
+		if (array) {
+			return ret;
+		}
+
+		return buffer ? Buffer.concat(ret, len) : ret.join('');
+	};
+
+	stream.getBufferedLength = () => len;
+
+	return stream;
+};
+
+
+/***/ }),
 /* 967 */
 /***/ (function(module) {
 
@@ -40512,7 +65802,54 @@ module.exports = function generate_validate(it, $keyword, $ruleType) {
 
 /***/ }),
 /* 968 */,
-/* 969 */,
+/* 969 */
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+var wrappy = __webpack_require__(11)
+module.exports = wrappy(once)
+module.exports.strict = wrappy(onceStrict)
+
+once.proto = once(function () {
+  Object.defineProperty(Function.prototype, 'once', {
+    value: function () {
+      return once(this)
+    },
+    configurable: true
+  })
+
+  Object.defineProperty(Function.prototype, 'onceStrict', {
+    value: function () {
+      return onceStrict(this)
+    },
+    configurable: true
+  })
+})
+
+function once (fn) {
+  var f = function () {
+    if (f.called) return f.value
+    f.called = true
+    return f.value = fn.apply(this, arguments)
+  }
+  f.called = false
+  return f
+}
+
+function onceStrict (fn) {
+  var f = function () {
+    if (f.called)
+      throw new Error(f.onceError)
+    f.called = true
+    return f.value = fn.apply(this, arguments)
+  }
+  var name = fn.name || 'Function wrapped with `once`'
+  f.onceError = name + " shouldn't be called more than once"
+  f.called = false
+  return f
+}
+
+
+/***/ }),
 /* 970 */,
 /* 971 */,
 /* 972 */
@@ -40555,8 +65892,8 @@ module.exports = {
 	write: write
 };
 
-var assert = __webpack_require__(489);
-var Buffer = __webpack_require__(215).Buffer;
+var assert = __webpack_require__(757);
+var Buffer = __webpack_require__(481).Buffer;
 var Key = __webpack_require__(852);
 var PrivateKey = __webpack_require__(502);
 var utils = __webpack_require__(270);
@@ -41050,7 +66387,7 @@ var disableAsyncHooks = function() {
     util.notEnumerableProp(Promise, "_getContext", getContextDomain);
 };
 
-var es5 = __webpack_require__(883);
+var es5 = __webpack_require__(461);
 var Async = __webpack_require__(726);
 var async = new Async();
 es5.defineProperty(Promise, "_async", {value: async});
@@ -41783,12 +67120,12 @@ __webpack_require__(414)(Promise);
 __webpack_require__(25)(Promise, apiRejection, INTERNAL, tryConvertToPromise, Proxyable, debug);
 __webpack_require__(220)(Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug);
 __webpack_require__(694)(Promise);
-__webpack_require__(948)(Promise, INTERNAL);
+__webpack_require__(804)(Promise, INTERNAL);
 __webpack_require__(321)(Promise, PromiseArray, tryConvertToPromise, apiRejection);
 __webpack_require__(832)(Promise, INTERNAL, tryConvertToPromise, apiRejection);
-__webpack_require__(814)(Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug);
+__webpack_require__(909)(Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug);
 __webpack_require__(149)(Promise, PromiseArray, debug);
-__webpack_require__(323)(Promise, PromiseArray, apiRejection);
+__webpack_require__(84)(Promise, PromiseArray, apiRejection);
 __webpack_require__(409)(Promise, INTERNAL, debug);
 __webpack_require__(780)(Promise, apiRejection, tryConvertToPromise, createContext, INTERNAL, debug);
 __webpack_require__(658)(Promise);
@@ -41933,7 +67270,7 @@ module.exports = {"$id":"cache.json#","$schema":"http://json-schema.org/draft-06
 // Copyright 2011 Mark Cavage <mcavage@gmail.com> All rights reserved.
 
 var assert = __webpack_require__(357);
-var Buffer = __webpack_require__(215).Buffer;
+var Buffer = __webpack_require__(481).Buffer;
 var ASN1 = __webpack_require__(362);
 var errors = __webpack_require__(584);
 
