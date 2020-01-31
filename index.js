@@ -1,6 +1,6 @@
 const core = require('@actions/core')
 const github = require('@actions/github')
-const Youtrack = require('youtrack-rest-client').__esModule
+const Youtrack = require('youtrack-rest-client').default
 const rp = require('request-promise')
 
 async function run() {
