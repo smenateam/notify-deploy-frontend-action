@@ -1,6 +1,6 @@
 const core = require('@actions/core')
 const github = require('@actions/github')
-const yt = require('youtrack-rest-client').Youtrack
+const Youtrack = require('youtrack-rest-client').Youtrack
 const rp = require('request-promise')
 
 async function run() {
@@ -40,7 +40,7 @@ async function run() {
 
     // отправляем на youtrack сообщение о статусе ветки
     const issue = await youtrack.issues.byId(taskname)
-    const youtrack = new yt.Youtrack({
+    const youtrack = new Youtrack({
       baseUrl: youtrack_url,
       token: youtrack_token,
     })
