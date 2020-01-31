@@ -2582,7 +2582,7 @@ exports.ProjectEndpoint = ProjectEndpoint;
 
 const core = __webpack_require__(470)
 const github = __webpack_require__(469)
-const Youtrack = __webpack_require__(941)
+const yt = __webpack_require__(941)
 const rp = __webpack_require__(99)
 
 async function run() {
@@ -2622,7 +2622,7 @@ async function run() {
 
     // отправляем на youtrack сообщение о статусе ветки
     const issue = await youtrack.issues.byId(taskname)
-    const youtrack = new Youtrack.Youtrack({
+    const youtrack = new yt.Youtrack({
       baseUrl: youtrack_url,
       token: youtrack_token,
     })
