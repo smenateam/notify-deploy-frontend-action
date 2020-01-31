@@ -19,11 +19,9 @@ async function run() {
     // получаем  taskname из pr_title
     const regex = new RegExp(/^([A-Z]+-\d+)/)
     const taskname = pr_title.match(regex)[1]
-    console.log('taskname', taskname)
 
     // Выгружено на http://ufa.site-368.frfrsite.ru/ и http://bratsk.site-368.frfrsite.ru/
     const remote_url = `http://ufa.${taskname}.${base_url}`
-    console.log('remote_url', remote_url)
 
     // проверяем что ветка выгрузилась
     await rp(remote_url, {
@@ -37,7 +35,6 @@ async function run() {
     // если ветка не выгрузилась - роняем action
 
     const message = `Выгружено на ${remote_url}`
-    console.log('message', message)
 
     // отправляем на youtrack сообщение о статусе ветки
     const youtrack = new Youtrack({
@@ -45,7 +42,6 @@ async function run() {
       token: youtrack_token,
     })
     const issue = await youtrack.issues.byId(taskname)
-    console.log('issue', issue)
 
     await youtrack.comments.create(issue.id, { text: message })
 
@@ -58,7 +54,6 @@ async function run() {
       body: message,
     })
   } catch (error) {
-    console.dir(error)
     core.setFailed(error.message)
   }
 }
