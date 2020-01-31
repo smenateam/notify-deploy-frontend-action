@@ -45,7 +45,7 @@ async function run() {
     })
     const issue = await youtrack.issues.byId(taskname)
 
-    youtrack.comments.create(issue.task_id, { text: message })
+    await youtrack.comments.create(issue.task_id, { text: message })
 
     // отсылка на гитхаб
     const client = new github.GitHub(repo_token)
