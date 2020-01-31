@@ -32,8 +32,6 @@ async function run() {
         pass: password,
         sendImmediately: false,
       },
-    }).catch(() => {
-      throw new Error(`По адресу ${remote_url} ошибка`)
     })
 
     // если ветка не выгрузилась - роняем action
@@ -49,7 +47,7 @@ async function run() {
     const issue = await youtrack.issues.byId(taskname)
     console.log('issue', issue)
 
-    await youtrack.comments.create(issue.task_id, { text: message })
+    await youtrack.comments.create(issue.id, { text: message })
 
     // отсылка на гитхаб
     const client = new github.GitHub(repo_token)
@@ -60,6 +58,7 @@ async function run() {
       body: message,
     })
   } catch (error) {
+    console.dir(error)
     core.setFailed(error.message)
   }
 }
