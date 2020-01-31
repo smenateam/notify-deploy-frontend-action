@@ -39,11 +39,11 @@ async function run() {
     const message = `Выгружено на ${remote_url}`
 
     // отправляем на youtrack сообщение о статусе ветки
-    const issue = await youtrack.issues.byId(taskname)
     const youtrack = new Youtrack({
       baseUrl: youtrack_url,
       token: youtrack_token,
     })
+    const issue = await youtrack.issues.byId(taskname)
 
     youtrack.comments.create(issue.task_id, { text: message })
 
