@@ -2582,7 +2582,7 @@ exports.ProjectEndpoint = ProjectEndpoint;
 
 const core = __webpack_require__(470)
 const github = __webpack_require__(469)
-const Youtrack = __webpack_require__(941).default
+const Youtrack = __webpack_require__(941).Youtrack
 const rp = __webpack_require__(99)
 
 async function run() {
@@ -2621,11 +2621,11 @@ async function run() {
     const message = `Выгружено на ${remote_url}`
 
     // отправляем на youtrack сообщение о статусе ветки
-    const issue = await youtrack.issues.byId(taskname)
     const youtrack = new Youtrack({
       baseUrl: youtrack_url,
       token: youtrack_token,
     })
+    const issue = await youtrack.issues.byId(taskname)
 
     youtrack.comments.create(issue.task_id, { text: message })
 
