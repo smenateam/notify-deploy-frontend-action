@@ -1,7 +1,6 @@
 const core = require('@actions/core')
 const github = require('@actions/github')
 const Youtrack = require('youtrack-rest-client')
-const fetch = require('node-fetch')
 const rp = require('request-promise')
 
 async function run() {
