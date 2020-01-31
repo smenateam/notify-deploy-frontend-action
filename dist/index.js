@@ -2582,7 +2582,7 @@ exports.ProjectEndpoint = ProjectEndpoint;
 
 const core = __webpack_require__(470)
 const github = __webpack_require__(469)
-const Youtrack = __webpack_require__(941).__esModule
+const Youtrack = __webpack_require__(941).default
 const rp = __webpack_require__(99)
 
 async function run() {
